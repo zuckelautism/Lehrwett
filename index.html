@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Anwesenheitswette</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700;12..96,800&display=swap">
+<style>
+:root{--bg:#eef2f6;--ink:#14213d;--mute:#5b6577;--card:#fff;--line:#d3dbe6;--mark:#ffd60a;--ja:#1f8a5f;--nein:#c93c54;font-family:"Bricolage Grotesque",system-ui,sans-serif}
+@media(prefers-color-scheme:dark){:root{--bg:#10151f;--ink:#e8edf5;--mute:#9aa6ba;--card:#1a2130;--line:#2c3649}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);line-height:1.45}
+main{max-width:640px;margin:0 auto;padding:20px 16px 60px}
+[hidden]{display:none!important}
+h1{font-size:2rem;font-weight:800;margin:.2em 0 .4em;letter-spacing:-.02em}
+h1 span{background:linear-gradient(transparent 55%,var(--mark) 55%)}
+h2{font-size:1.15rem;margin:1.4em 0 .5em}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin:10px 0}
+input,button{font:inherit;border-radius:8px;border:1px solid var(--line);padding:9px 12px;background:var(--card);color:var(--ink)}
+input{width:100%;margin:4px 0}
+button{cursor:pointer;font-weight:700}
+button:focus-visible,input:focus-visible{outline:3px solid var(--mark);outline-offset:1px}
+.pri{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.ja{background:var(--ja);color:#fff;border-color:var(--ja)}
+.nein{background:var(--nein);color:#fff;border-color:var(--nein)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row>input{flex:1;min-width:90px;width:auto}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pts{font-size:1.6rem;font-weight:800}
+.mute{color:var(--mute);font-size:.9rem}
+.tabs{display:flex;gap:6px;margin:12px 0}
+.tabs button[aria-selected=true]{background:var(--mark);color:#14213d;border-color:var(--mark)}
+.bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--line);margin:8px 0}
+.bar i{background:var(--ja)}
+.bar b{background:var(--nein)}
+.err{color:var(--nein);font-weight:700;min-height:1.4em}
+.rk{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}
+code{background:var(--line);padding:2px 6px;border-radius:5px}
+</style>
+</head>
+<body>
+
+<main id="auth" hidden>
+  <h1><span>Anwesenheitswette</span></h1>
+  <div class="card">
+    <input id="u" placeholder="Benutzername (a-z, 0-9, _)" autocomplete="username">
+    <input id="p" type="password" placeholder="Passwort (mind. 6 Zeichen)" autocomplete="current-password">
+    <input id="c" placeholder="Einladungscode (nur zum Registrieren)" autocapitalize="characters">
+    <p class="err" id="aerr"></p>
+    <div class="row">
+      <button class="pri" data-act="login">Anmelden</button>
+      <button data-act="register">Mit Code registrieren</button>
+    </div>
+  </div>
+  <p class="mute">Nur Spielpunkte, kein echtes Geld.</p>
+</main>
+
+<main id="app" hidden>
+  <div class="top">
+    <div><div class="mute" id="who"></div><div class="pts" id="pts"></div></div>
+    <button data-act="logout">Abmelden</button>
+  </div>
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <section id="view"></section>
+</main>
+
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {getFirestore,doc,setDoc,addDoc,collection,onSnapshot,writeBatch,serverTimestamp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA3nmLvWFZ-VQkr_lJ3pWzPNroa-jTH_PA",
+  authDomain: "lehrwetten.firebaseapp.com",
+  projectId: "lehrwetten",
+  storageBucket: "lehrwetten.firebasestorage.app",
+  messagingSenderId: "657511674851",
+  appId: "1:657511674851:web:9b1f83887fa6cafe0f26d6"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app), db = getFirestore(app);
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const mail = n => n + "@wette.local";
+const fmt = d => d.split("-").reverse().join(".");
+
+let me = null, users = [], wetten = [], tipps = [], codes = [], tab = "wetten", subs = [], codesSub = null;
+
+const snap = (col, set) => onSnapshot(collection(db, col), s => { set(s.docs.map(d => ({id: d.id, ...d.data()}))); render(); });
+
+onAuthStateChanged(auth, u => {
+  subs.forEach(f => f()); subs = []; if (codesSub) { codesSub(); codesSub = null; }
+  me = null;
+  if (!u) { $("#auth").hidden = false; $("#app").hidden = true; return; }
+  subs.push(onSnapshot(doc(db, "users", u.uid), s => {
+    me = s.exists() ? {id: s.id, ...s.data()} : null;
+    $("#auth").hidden = !!me; $("#app").hidden = !me;
+    if (me && me.rolle === "admin" && !codesSub) codesSub = snap("codes", v => codes = v);
+    render();
+  }));
+  subs.push(snap("users", v => users = v), snap("wetten", v => wetten = v), snap("tipps", v => tipps = v));
+});
+
+async function register() {
+  const n = $("#u").value.trim().toLowerCase(), p = $("#p").value, c = $("#c").value.trim().toUpperCase();
+  if (!/^[a-z0-9_]{3,20}$/.test(n)) return err("Benutzername: 3-20 Zeichen, nur a-z, 0-9 und _.");
+  if (p.length < 6) return err("Passwort: mindestens 6 Zeichen.");
+  if (!c) return err("Bitte Einladungscode eingeben.");
+  let cred;
+  try { cred = await createUserWithEmailAndPassword(auth, mail(n), p); }
+  catch (e) { return err(e.code === "auth/email-already-in-use" ? "Benutzername ist schon vergeben." : "Registrierung fehlgeschlagen."); }
+  try {
+    const b = writeBatch(db);
+    b.set(doc(db, "users", cred.user.uid), {name: n, points: 1000, rolle: "user", code: c});
+    b.update(doc(db, "codes", c), {used: true, usedBy: cred.user.uid});
+    await b.commit();
+  } catch (e) {
+    await cred.user.delete();
+    err("Code ungültig oder schon benutzt.");
+  }
+}
+async function login() {
+  try { await signInWithEmailAndPassword(auth, mail($("#u").value.trim().toLowerCase()), $("#p").value); }
+  catch (e) { err("Benutzername oder Passwort falsch."); }
+}
+const err = m => $("#aerr").textContent = m;
+
+const open = () => me ? tipps.filter(t => t.uid === me.id && !t.ausgewertet).reduce((s, t) => s + t.einsatz, 0) : 0;
+const pool = (w, side) => tipps.filter(t => t.wetteId === w.id && t.seite === side).reduce((s, t) => s + t.einsatz, 0);
+
+async function bet(wid, side, el) {
+  const w = wetten.find(x => x.id === wid), e = parseInt(el.value, 10);
+  if (!e || e < 1 || e > me.points - open()) return alert("Einsatz muss zwischen 1 und deinen freien Punkten liegen.");
+  try { await setDoc(doc(db, "tipps", wid + "_" + me.id), {wetteId: wid, uid: me.id, name: me.name, seite: side, einsatz: e, ausgewertet: false}); }
+  catch (x) { alert("Tipp nicht möglich (Wette evtl. schon geschlossen)."); }
+}
+
+async function settle(wid, ergebnis) {
+  const ts = tipps.filter(t => t.wetteId === wid);
+  const win = ts.filter(t => t.seite === ergebnis), lose = ts.filter(t => t.seite !== ergebnis);
+  const wp = win.reduce((s, t) => s + t.einsatz, 0), lp = lose.reduce((s, t) => s + t.einsatz, 0);
+  if (!confirm("Ergebnis '" + ergebnis.toUpperCase() + "' festlegen und Punkte verteilen?")) return;
+  const b = writeBatch(db);
+  if (wp > 0 && lp > 0) {
+    win.forEach(t => { const u = users.find(x => x.id === t.uid); b.update(doc(db, "users", t.uid), {points: u.points + Math.floor(t.einsatz * lp / wp)}); });
+    lose.forEach(t => { const u = users.find(x => x.id === t.uid); b.update(doc(db, "users", t.uid), {points: Math.max(0, u.points - t.einsatz)}); });
+  } // sonst: eine Seite leer, Einsätze gelten als zurückgegeben
+  ts.forEach(t => b.update(doc(db, "tipps", t.id), {ausgewertet: true}));
+  b.update(doc(db, "wetten", wid), {status: "beendet", ergebnis});
+  await b.commit();
+}
+
+async function newBet() {
+  const l = $("#wl").value.trim(), d = $("#wd").value;
+  if (!l || !d) return alert("Kürzel und Datum angeben.");
+  await addDoc(collection(db, "wetten"), {lehrer: l, datum: d, frage: "Ist " + l + " am " + fmt(d) + " anwesend?", status: "offen", ergebnis: null, erstellt: serverTimestamp()});
+}
+async function newCode() {
+  const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let c = "";
+  for (let i = 0; i < 8; i++) c += A[crypto.getRandomValues(new Uint8Array(1))[0] % A.length];
+  await setDoc(doc(db, "codes", c), {used: false});
+}
+
+function betCard(w) {
+  const j = pool(w, "ja"), n = pool(w, "nein"), tot = j + n, mine = tipps.find(t => t.id === w.id + "_" + me.id);
+  const bar = `<div class="bar"><i style="width:${tot ? j / tot * 100 : 50}%"></i><b style="width:${tot ? n / tot * 100 : 50}%"></b></div>
+    <div class="mute">Ja: ${j} Punkte | Nein: ${n} Punkte</div>`;
+  let act = "";
+  if (w.status === "beendet") {
+    act = `<p><b>Ergebnis: ${w.ergebnis === "ja" ? "anwesend" : "nicht anwesend"}</b>${mine ? " (dein Tipp: " + mine.seite + ", " + mine.einsatz + ")" : ""}</p>`;
+  } else if (mine) {
+    act = `<p>Dein Tipp: <b>${mine.seite.toUpperCase()}</b> mit ${mine.einsatz} Punkten.</p>`;
+  } else {
+    act = `<div class="row"><input type="number" min="1" placeholder="Einsatz" data-bet="${w.id}">
+      <button class="ja" data-act="bet" data-w="${w.id}" data-s="ja">Anwesend</button>
+      <button class="nein" data-act="bet" data-w="${w.id}" data-s="nein">Nicht da</button></div>`;
+  }
+  return `<div class="card"><b>${esc(w.frage)}</b>${bar}${act}</div>`;
+}
+
+function render() {
+  if (!me) return;
+  $("#who").textContent = me.name + (me.rolle === "admin" ? " (Admin)" : "");
+  $("#pts").textContent = me.points + " Punkte" + (open() ? " (" + (me.points - open()) + " frei)" : "");
+  const T = [["wetten", "Wetten"], ["rang", "Rangliste"]]; if (me.rolle === "admin") T.push(["admin", "Admin"]);
+  $("#tabs").innerHTML = T.map(([k, l]) => `<button role="tab" aria-selected="${tab === k}" data-act="tab" data-t="${k}">${l}</button>`).join("");
+  const v = $("#view");
+  if (document.activeElement && v.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return; // Eingabe nicht zerstören
+  const sorted = [...wetten].sort((a, b) => b.datum.localeCompare(a.datum));
+  if (tab === "wetten") {
+    const o = sorted.filter(w => w.status === "offen"), c = sorted.filter(w => w.status !== "offen");
+    v.innerHTML = (o.length ? o.map(betCard).join("") : `<p class="mute">Gerade keine offene Wette. Der Admin legt neue an.</p>`) + (c.length ? "<h2>Beendet</h2>" + c.map(betCard).join("") : "");
+  } else if (tab === "rang") {
+    v.innerHTML = `<div class="card">` + [...users].sort((a, b) => b.points - a.points).map((u, i) => `<div class="rk"><span>${i + 1}. ${esc(u.name)}</span><b>${u.points}</b></div>`).join("") + `</div>`;
+  } else {
+    v.innerHTML = `<h2>Neue Wette</h2><div class="card row"><input id="wl" placeholder="Lehrer-Kürzel"><input id="wd" type="date"><button class="pri" data-act="newbet">Anlegen</button></div>
+      <h2>Offene Wetten auswerten</h2>` + (sorted.filter(w => w.status === "offen").map(w => `<div class="card"><b>${esc(w.frage)}</b>
+        <div class="row" style="margin-top:8px"><button class="ja" data-act="settle" data-w="${w.id}" data-s="ja">War anwesend</button><button class="nein" data-act="settle" data-w="${w.id}" data-s="nein">War nicht da</button></div></div>`).join("") || `<p class="mute">Nichts offen.</p>`) +
+      `<h2>Einladungscodes</h2><button class="pri" data-act="newcode">Neuen Code erzeugen</button><div class="card">` +
+      (codes.filter(c => !c.used).map(c => `<code>${esc(c.id)}</code> `).join("") || `<span class="mute">Keine freien Codes.</span>`) + `</div>`;
+  }
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b) return; const a = b.dataset.act;
+  if (a === "login") login(); else if (a === "register") register(); else if (a === "logout") signOut(auth);
+  else if (a === "tab") { tab = b.dataset.t; render(); }
+  else if (a === "bet") bet(b.dataset.w, b.dataset.s, document.querySelector(`[data-bet="${b.dataset.w}"]`));
+  else if (a === "settle") settle(b.dataset.w, b.dataset.s);
+  else if (a === "newbet") newBet(); else if (a === "newcode") newCode();
+});
+</script>
+</body>
+</html>
