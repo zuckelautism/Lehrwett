@@ -29,7 +29,10 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--mark);outline-o
 .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .pts{font-size:1.6rem;font-weight:800}
 .mute{color:var(--mute);font-size:.9rem}
-.tabs{display:flex;gap:6px;margin:12px 0}
+.tabs{display:flex;gap:6px;margin:12px 0;flex-wrap:wrap}
+.new{border-left:5px solid var(--mark)}
+.pos{color:var(--ja)}
+.neg{color:var(--nein)}
 .tabs button[aria-selected=true]{background:var(--mark);color:#14213d;border-color:var(--mark)}
 .bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--line);margin:8px 0}
 .bar i{background:var(--ja)}
@@ -62,6 +65,7 @@ code{background:var(--line);padding:2px 6px;border-radius:5px}
     <button data-act="logout">Abmelden</button>
   </div>
   <div class="tabs" role="tablist" id="tabs"></div>
+  <div id="nbar"></div>
   <section id="view"></section>
 </main>
 
@@ -86,17 +90,19 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 const mail = n => n + "@wette.local";
 const fmt = d => d.split("-").reverse().join(".");
 
+let seenAt = null, hl = 0, ST = {}, rd = {};
 let me = null, users = [], wetten = [], tipps = [], codes = [], tab = "wetten", subs = [], codesSub = null;
 
-const snap = (col, set) => onSnapshot(collection(db, col), s => { set(s.docs.map(d => ({id: d.id, ...d.data()}))); render(); });
+const snap = (col, set) => onSnapshot(collection(db, col), s => { set(s.docs.map(d => ({id: d.id, ...d.data()}))); rd[col] = 1; render(); });
 
 onAuthStateChanged(auth, u => {
   subs.forEach(f => f()); subs = []; if (codesSub) { codesSub(); codesSub = null; }
-  me = null;
+  me = null; rd = {}; seenAt = null;
   if (!u) { $("#auth").hidden = false; $("#app").hidden = true; return; }
   subs.push(onSnapshot(doc(db, "users", u.uid), s => {
     me = s.exists() ? {id: s.id, ...s.data()} : null;
     $("#auth").hidden = !!me; $("#app").hidden = !me;
+    if (me && seenAt === null) { seenAt = +ls.get("s_" + me.id) || 0; if (!seenAt) { seenAt = Date.now(); ls.set("s_" + me.id, seenAt); } }
     if (me && me.rolle === "admin" && !codesSub) codesSub = snap("codes", v => codes = v);
     render();
   }));
@@ -148,7 +154,7 @@ async function settle(wid, ergebnis) {
     lose.forEach(t => { const u = users.find(x => x.id === t.uid); b.update(doc(db, "users", t.uid), {points: Math.max(0, u.points - t.einsatz)}); });
   } // sonst: eine Seite leer, Einsätze gelten als zurückgegeben
   ts.forEach(t => b.update(doc(db, "tipps", t.id), {ausgewertet: true}));
-  b.update(doc(db, "wetten", wid), {status: "beendet", ergebnis});
+  b.update(doc(db, "wetten", wid), {status: "beendet", ergebnis, beendetAm: serverTimestamp()});
   await b.commit();
 }
 
@@ -161,6 +167,60 @@ async function newCode() {
   const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let c = "";
   for (let i = 0; i < 8; i++) c += A[crypto.getRandomValues(new Uint8Array(1))[0] % A.length];
   await setDoc(doc(db, "codes", c), {used: false});
+}
+
+const ls = {get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }};
+const ts = x => x && x.toMillis ? x.toMillis() : 0;
+const ready = () => rd.users && rd.wetten && rd.tipps;
+const sum = a => a.reduce((s, t) => s + t.einsatz, 0);
+const myTip = w => tipps.find(t => t.id === w.id + "_" + me.id);
+
+// Punkte-Änderung eines Tipps in einer beendeten Wette (gleiche Rechnung wie bei der Auswertung)
+function delta(w, t) {
+  const all = tipps.filter(x => x.wetteId === w.id), wp = sum(all.filter(x => x.seite === w.ergebnis)), lp = sum(all.filter(x => x.seite !== w.ergebnis));
+  if (!wp || !lp) return 0;
+  return t.seite === w.ergebnis ? Math.floor(t.einsatz * lp / wp) : -t.einsatz;
+}
+const resTxt = d => d > 0 ? "Du gewinnst +" + d + " Punkte." : d < 0 ? "Du verlierst " + (-d) + " Punkte." : "Dein Einsatz kommt zurück.";
+
+function stats() {
+  const g = {};
+  wetten.filter(w => w.status === "beendet").forEach(w => {
+    const k = w.lehrer.trim().toLowerCase(); g[k] ??= {n: w.lehrer.trim(), da: 0, all: 0};
+    g[k].all++; if (w.ergebnis === "ja") g[k].da++;
+  });
+  return g;
+}
+
+function feed() {
+  const ev = [];
+  wetten.forEach(w => {
+    ev.push({t: ts(w.erstellt) || Date.now(), txt: "Neue Wette: " + w.frage});
+    if (w.status === "beendet") {
+      const m = myTip(w), d = m ? delta(w, m) : 0;
+      ev.push({t: ts(w.beendetAm) || ts(w.erstellt) || Date.now(), cls: d > 0 ? "pos" : d < 0 ? "neg" : "",
+        txt: "Ergebnis: " + w.lehrer + " war am " + fmt(w.datum) + (w.ergebnis === "ja" ? " anwesend." : " nicht da.") + (m ? " " + resTxt(d) : "")});
+    }
+  });
+  return ev.sort((a, b) => b.t - a.t).slice(0, 40);
+}
+
+function notify(title, body) {
+  try { if ("Notification" in window && Notification.permission === "granted") new Notification(title, {body}); } catch (e) {}
+}
+
+// Meldet neue Wetten ohne Tipp und Ergebnisse eigener Tipps (beim ersten Start still)
+function check() {
+  if (!me || !ready()) return;
+  const key = "n_" + me.id; let arr = null;
+  try { arr = JSON.parse(ls.get(key)); } catch (e) {}
+  const first = !Array.isArray(arr), seen = new Set(first ? [] : arr), add = [];
+  wetten.forEach(w => {
+    const m = myTip(w);
+    if (w.status === "offen" && !m && !seen.has("n" + w.id)) { add.push("n" + w.id); if (!first) notify("Neue Wette", w.frage); }
+    if (w.status === "beendet" && m && !seen.has("r" + w.id)) { add.push("r" + w.id); if (!first) notify("Wette beendet", resTxt(delta(w, m))); }
+  });
+  if (first || add.length) { add.forEach(a => seen.add(a)); ls.set(key, JSON.stringify([...seen])); }
 }
 
 function betCard(w) {
@@ -177,21 +237,34 @@ function betCard(w) {
       <button class="ja" data-act="bet" data-w="${w.id}" data-s="ja">Anwesend</button>
       <button class="nein" data-act="bet" data-w="${w.id}" data-s="nein">Nicht da</button></div>`;
   }
-  return `<div class="card"><b>${esc(w.frage)}</b>${bar}${act}</div>`;
+  const s = ST[w.lehrer.trim().toLowerCase()];
+  const q = s ? `<div class="mute">Bisherige Anwesenheit: ${Math.round(s.da / s.all * 100)} % (${s.da} von ${s.all})</div>` : "";
+  return `<div class="card"><b>${esc(w.frage)}</b>${q}${bar}${act}</div>`;
 }
 
 function render() {
   if (!me) return;
   $("#who").textContent = me.name + (me.rolle === "admin" ? " (Admin)" : "");
   $("#pts").textContent = me.points + " Punkte" + (open() ? " (" + (me.points - open()) + " frei)" : "");
-  const T = [["wetten", "Wetten"], ["rang", "Rangliste"]]; if (me.rolle === "admin") T.push(["admin", "Admin"]);
+  ST = stats(); check();
+  if (tab === "updates" && seenAt !== null) { seenAt = Date.now(); ls.set("s_" + me.id, seenAt); }
+  const todo = wetten.filter(w => w.status === "offen" && !myTip(w)).length, unread = feed().filter(e => e.t > seenAt).length;
+  const T = [["wetten", "Wetten" + (todo ? " (" + todo + ")" : "")], ["updates", "Updates" + (unread ? " (" + unread + ")" : "")], ["anw", "Anwesenheit"], ["rang", "Rangliste"]];
+  if (me.rolle === "admin") T.push(["admin", "Admin"]);
   $("#tabs").innerHTML = T.map(([k, l]) => `<button role="tab" aria-selected="${tab === k}" data-act="tab" data-t="${k}">${l}</button>`).join("");
+  $("#nbar").innerHTML = "Notification" in window && Notification.permission === "default" ? `<button data-act="notif">Benachrichtigungen aktivieren</button>` : "";
   const v = $("#view");
   if (document.activeElement && v.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return; // Eingabe nicht zerstören
   const sorted = [...wetten].sort((a, b) => b.datum.localeCompare(a.datum));
   if (tab === "wetten") {
     const o = sorted.filter(w => w.status === "offen"), c = sorted.filter(w => w.status !== "offen");
     v.innerHTML = (o.length ? o.map(betCard).join("") : `<p class="mute">Gerade keine offene Wette. Der Admin legt neue an.</p>`) + (c.length ? "<h2>Beendet</h2>" + c.map(betCard).join("") : "");
+  } else if (tab === "updates") {
+    const F = feed();
+    v.innerHTML = F.length ? F.map(e => `<div class="card ${e.t > hl ? "new" : ""}"><span class="mute">${new Date(e.t).toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"})}</span><br><b class="${e.cls || ""}">${esc(e.txt)}</b></div>`).join("") : `<p class="mute">Noch keine Neuigkeiten.</p>`;
+  } else if (tab === "anw") {
+    const L = Object.values(ST).sort((a, b) => b.all - a.all);
+    v.innerHTML = L.length ? L.map(s => { const p = Math.round(s.da / s.all * 100); return `<div class="card"><div class="top"><b>${esc(s.n)}</b><span class="pts">${p} %</span></div><div class="bar"><i style="width:${p}%"></i></div><div class="mute">${s.da} von ${s.all} Wetten anwesend</div></div>`; }).join("") : `<p class="mute">Noch keine ausgewerteten Wetten.</p>`;
   } else if (tab === "rang") {
     v.innerHTML = `<div class="card">` + [...users].sort((a, b) => b.points - a.points).map((u, i) => `<div class="rk"><span>${i + 1}. ${esc(u.name)}</span><b>${u.points}</b></div>`).join("") + `</div>`;
   } else {
@@ -206,7 +279,8 @@ function render() {
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b) return; const a = b.dataset.act;
   if (a === "login") login(); else if (a === "register") register(); else if (a === "logout") signOut(auth);
-  else if (a === "tab") { tab = b.dataset.t; render(); }
+  else if (a === "tab") { tab = b.dataset.t; if (tab === "updates") hl = seenAt; render(); }
+  else if (a === "notif") Notification.requestPermission().then(render);
   else if (a === "bet") bet(b.dataset.w, b.dataset.s, document.querySelector(`[data-bet="${b.dataset.w}"]`));
   else if (a === "settle") settle(b.dataset.w, b.dataset.s);
   else if (a === "newbet") newBet(); else if (a === "newcode") newCode();
