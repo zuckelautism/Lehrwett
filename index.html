@@ -153,7 +153,7 @@ async function register() {
   try {
     const b = writeBatch(db);
     b.set(doc(db, "users", cred.user.uid), {name: n, points: 1000, rolle: "user", code: c});
-    b.update(doc(db, "codes", c), {used: true, usedBy: cred.user.uid});
+    b.update(doc(db, "codes", c), {uses: increment(1)});
     await b.commit();
   } catch (e) {
     await cred.user.delete();
@@ -195,10 +195,14 @@ async function newBet() {
   await addDoc(collection(db, "wetten"), {lehrer: l, datum: d, frage: "Ist " + l + " am " + fmt(d) + " anwesend?", status: "offen", ergebnis: null, pot: +$("#wp").value || 2, erstellt: serverTimestamp()});
 }
 async function newCode() {
-  const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let c = "";
-  for (let i = 0; i < 8; i++) c += A[crypto.getRandomValues(new Uint8Array(1))[0] % A.length];
-  await setDoc(doc(db, "codes", c), {used: false});
+  const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", max = parseInt($("#cm").value, 10) || 1;
+  let c = $("#cn").value.trim().toUpperCase();
+  if (c && !/^[A-Z0-9_-]{4,20}$/.test(c)) return alert("Code-Name: 4-20 Zeichen, nur A-Z, 0-9, _ und -.");
+  if (!c) for (let i = 0; i < 8; i++) c += A[crypto.getRandomValues(new Uint8Array(1))[0] % A.length];
+  try { await setDoc(doc(db, "codes", c), {max, uses: 0}); }
+  catch (e) { alert("Code konnte nicht angelegt werden (gibt es ihn schon?)."); }
 }
+const rest = c => c.used ? 0 : (c.max || 1) - (c.uses || 0); // alte Einmal-Codes haben max/uses nicht
 
 const ls = {get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }};
 const ts = x => x && x.toMillis ? x.toMillis() : 0;
@@ -385,8 +389,8 @@ function render() {
     v.innerHTML = `<h2>Neue Wette</h2><div class="card row"><input id="wl" placeholder="Lehrer-Kürzel"><input id="wd" type="date"><select id="wp" aria-label="Pot-Multiplikator"><option value="2">Pot ×2</option><option value="1">Pot ×1</option><option value="3">Pot ×3</option></select><button class="pri" data-act="newbet">Anlegen</button></div>
       <h2>Offene Wetten auswerten</h2>` + (sorted.filter(w => w.status === "offen").map(w => `<div class="card"><b>${esc(w.frage)}</b>
         <div class="row" style="margin-top:8px"><button class="ja" data-act="settle" data-w="${w.id}" data-s="ja">War anwesend</button><button class="nein" data-act="settle" data-w="${w.id}" data-s="nein">War nicht da</button></div></div>`).join("") || `<p class="mute">Nichts offen.</p>`) +
-      `<h2>Einladungscodes</h2><button class="pri" data-act="newcode">Neuen Code erzeugen</button><div class="card">` +
-      (codes.filter(c => !c.used).map(c => `<code>${esc(c.id)}</code> `).join("") || `<span class="mute">Keine freien Codes.</span>`) + `</div>`;
+      `<h2>Einladungscodes</h2><div class="card row"><input id="cn" placeholder="Code-Name (leer = zufällig)"><input id="cm" type="number" min="1" value="1" title="Wie oft nutzbar" aria-label="Wie oft nutzbar" style="max-width:90px"><button class="pri" data-act="newcode">Code erzeugen</button></div><div class="card">` +
+      (codes.filter(c => rest(c) > 0).map(c => `<div class="rk"><code>${esc(c.id)}</code><span class="mute">${rest(c)} von ${c.max || 1} frei</span></div>`).join("") || `<span class="mute">Keine freien Codes.</span>`) + `</div>`;
   }
 }
 
