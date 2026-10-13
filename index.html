@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Anwesenheitswette</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700;12..96,800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700;12..96,800&family=Press+Start+2P&family=Pacifico&family=Bangers&family=Cinzel:wght@700&display=swap">
 <style>
 :root{--bg:#eef2f6;--ink:#14213d;--mute:#5b6577;--card:#fff;--line:#d3dbe6;--mark:#ffd60a;--ja:#1f8a5f;--nein:#c93c54;font-family:"Bricolage Grotesque",system-ui,sans-serif}
 @media(prefers-color-scheme:dark){:root{--bg:#10151f;--ink:#e8edf5;--mute:#9aa6ba;--card:#1a2130;--line:#2c3649}}
@@ -31,6 +31,29 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--mark);outline-o
 .mute{color:var(--mute);font-size:.9rem}
 .tabs{display:flex;gap:6px;margin:12px 0;flex-wrap:wrap}
 .new{border-left:5px solid var(--mark)}
+select{font:inherit;border-radius:8px;border:1px solid var(--line);padding:9px 12px;background:var(--card);color:var(--ink)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.nm{display:inline-block}
+.f_pixel{font-family:"Press Start 2P",monospace;font-size:.7em}
+.f_hand{font-family:"Pacifico",cursive}
+.f_comic{font-family:"Bangers",cursive;letter-spacing:.05em}
+.f_serif{font-family:"Cinzel",serif;font-weight:700}
+.c_gold{color:#d4a017}.c_pink{color:#ff2fa0}.c_ice{color:#4cc9f0}
+.c_rainbow,.c_fire{background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+.c_rainbow{background-image:linear-gradient(90deg,#f33,#fa0,#ee0,#3c3,#0cf,#63f,#f3c,#f33)}
+.c_fire{background-image:linear-gradient(90deg,#ffd60a,#ff6b00,#e01e37,#ff6b00,#ffd60a)}
+@media(prefers-reduced-motion:no-preference){
+.c_rainbow,.c_fire{animation:bgm 3s linear infinite}
+.a_pulse{animation:pls 1.4s ease-in-out infinite}
+.a_float{animation:flt 2.2s ease-in-out infinite}
+.a_wobble{animation:wob .9s ease-in-out infinite}
+.a_glow{animation:glw 1.6s ease-in-out infinite}
+}
+@keyframes bgm{to{background-position:200% 0}}
+@keyframes pls{50%{transform:scale(1.12)}}
+@keyframes flt{50%{transform:translateY(-3px)}}
+@keyframes wob{25%{transform:rotate(-3deg)}75%{transform:rotate(3deg)}}
+@keyframes glw{50%{filter:drop-shadow(0 0 7px var(--mark))}}
 .bc{cursor:pointer}.bc:hover{border-color:var(--ink)}
 #modal{position:fixed;inset:0;background:rgba(10,15,25,.6);display:flex;align-items:flex-end;justify-content:center;z-index:10}
 .mw{background:var(--bg);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px}
@@ -81,7 +104,7 @@ code{background:var(--line);padding:2px 6px;border-radius:5px}
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import {getFirestore,doc,setDoc,addDoc,collection,onSnapshot,writeBatch,serverTimestamp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import {getFirestore,doc,setDoc,addDoc,collection,onSnapshot,writeBatch,serverTimestamp,updateDoc,increment,arrayUnion} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA3nmLvWFZ-VQkr_lJ3pWzPNroa-jTH_PA",
@@ -162,14 +185,14 @@ async function settle(wid, ergebnis) {
     if (d) b.update(doc(db, "users", t.uid), {points: Math.max(0, u.points + d)}); // d=0: Einsatz zurück
     b.update(doc(db, "tipps", t.id), {ausgewertet: true});
   });
-  b.update(doc(db, "wetten", wid), {status: "beendet", ergebnis, bonus: true, beendetAm: serverTimestamp()});
+  b.update(doc(db, "wetten", wid), {status: "beendet", ergebnis, bonus: true, pot: potOf(w), beendetAm: serverTimestamp()});
   await b.commit();
 }
 
 async function newBet() {
   const l = $("#wl").value.trim(), d = $("#wd").value;
   if (!l || !d) return alert("Kürzel und Datum angeben.");
-  await addDoc(collection(db, "wetten"), {lehrer: l, datum: d, frage: "Ist " + l + " am " + fmt(d) + " anwesend?", status: "offen", ergebnis: null, erstellt: serverTimestamp()});
+  await addDoc(collection(db, "wetten"), {lehrer: l, datum: d, frage: "Ist " + l + " am " + fmt(d) + " anwesend?", status: "offen", ergebnis: null, pot: +$("#wp").value || 2, erstellt: serverTimestamp()});
 }
 async function newCode() {
   const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let c = "";
@@ -186,6 +209,7 @@ const myTip = w => tipps.find(t => t.id === w.id + "_" + me.id);
 const bt = w => ts(w.beendetAm) || ts(w.erstellt);
 const pools = w => { const a = tipps.filter(x => x.wetteId === w.id); return {wp: sum(a.filter(x => x.seite === w.ergebnis)), lp: sum(a.filter(x => x.seite !== w.ergebnis))}; };
 // Serien-Bonus: richtige Tipps in Folge VOR dieser Wette (Rückerstattungen zählen nicht)
+const potOf = w => w.pot ?? (w.status === "beendet" ? 1 : 2); // alte, schon beendete Wetten ohne Pot
 const mult = n => n >= 4 ? 2 : n === 3 ? 1.5 : n === 2 ? 1.25 : 1;
 const fx = k => String(k).replace(".", ",");
 function streakBefore(uid, w) {
@@ -204,7 +228,7 @@ function delta(w, t) {
   const {wp, lp} = pools(w); if (!wp || !lp) return 0;
   if (t.seite !== w.ergebnis) return -t.einsatz;
   const k = (w.status === "beendet" && !w.bonus) ? 1 : mult(streakBefore(t.uid, w)); // alte Wetten ohne Bonus
-  return Math.floor(Math.floor(t.einsatz * lp / wp) * k);
+  return Math.floor((Math.floor(t.einsatz * (wp + lp) * potOf(w) / wp) - t.einsatz) * k);
 }
 const resTxt = d => d > 0 ? "Du gewinnst +" + d + " Punkte." : d < 0 ? "Du verlierst " + (-d) + " Punkte." : "Dein Einsatz kommt zurück.";
 
@@ -248,6 +272,26 @@ function check() {
   if (first || add.length) { add.forEach(a => seen.add(a)); ls.set(key, JSON.stringify([...seen])); }
 }
 
+const CATS = {font: "Schriftarten", color: "Farben & Effekte", anim: "Animationen"};
+const SHOP = [
+  {id: "f_pixel", cat: "font", n: "Pixel", p: 300}, {id: "f_hand", cat: "font", n: "Handschrift", p: 250},
+  {id: "f_comic", cat: "font", n: "Comic", p: 250}, {id: "f_serif", cat: "font", n: "Edel", p: 300},
+  {id: "c_gold", cat: "color", n: "Gold", p: 150}, {id: "c_pink", cat: "color", n: "Neon-Pink", p: 150}, {id: "c_ice", cat: "color", n: "Eisblau", p: 150},
+  {id: "c_rainbow", cat: "color", n: "Regenbogen (animiert)", p: 600}, {id: "c_fire", cat: "color", n: "Feuer (animiert)", p: 500},
+  {id: "a_pulse", cat: "anim", n: "Puls", p: 200}, {id: "a_float", cat: "anim", n: "Schweben", p: 200},
+  {id: "a_wobble", cat: "anim", n: "Wackeln", p: 200}, {id: "a_glow", cat: "anim", n: "Leuchten", p: 400}
+];
+const nm = (name, eq) => { eq = eq || {}; return `<span class="nm ${[eq.font, eq.color, eq.anim].filter(Boolean).join(" ")}">${esc(name)}</span>`; };
+async function buy(id) {
+  const i = SHOP.find(x => x.id === id); if (!i || me.points - open() < i.p) return;
+  try { await updateDoc(doc(db, "users", me.id), {points: increment(-i.p), owned: arrayUnion(id)}); }
+  catch (e) { alert("Kauf fehlgeschlagen."); }
+}
+async function equip(cat, id) {
+  try { await updateDoc(doc(db, "users", me.id), {equipped: {...(me.equipped || {}), [cat]: id}}); }
+  catch (e) { alert("Anlegen fehlgeschlagen."); }
+}
+
 function chance(w) { const j = pool(w, "ja"), n = pool(w, "nein"), t = j + n; return {t, p: t ? Math.round(j / t * 100) : 50}; }
 function betCard(w) {
   const c = chance(w), m = myTip(w), s = ST[w.lehrer.trim().toLowerCase()];
@@ -255,7 +299,7 @@ function betCard(w) {
   const st = w.status === "beendet" ? `<b>${w.ergebnis === "ja" ? "Anwesend" : "Nicht da"}</b>` : `<span class="mute">offen</span>`;
   return `<div class="card bc" tabindex="0" role="button" data-act="open" data-w="${w.id}"><div class="top"><b>${esc(w.frage)}</b>${st}</div>
     <div class="bar"><i style="width:${c.p}%"></i><b style="width:${100 - c.p}%"></b></div>
-    <div class="mute">Anwesend ${c.p} % · Nicht da ${100 - c.p} % · Pool ${c.t}${q}${m ? " · Dein Tipp: " + m.seite.toUpperCase() + " " + m.einsatz : ""}</div></div>`;
+    <div class="mute">Anwesend ${c.p} % · Nicht da ${100 - c.p} % · Pool ${c.t}${potOf(w) > 1 ? " ×" + potOf(w) : ""}${q}${m ? " · Dein Tipp: " + m.seite.toUpperCase() + " " + m.einsatz : ""}</div></div>`;
 }
 
 const tz = t => ts(t.zeit) || (t.zeit === null ? Date.now() : 0);
@@ -272,8 +316,8 @@ function est(w) {
   const e = parseInt(mAmt, 10); if (!e || e < 1) return "Einsatz eingeben, dann siehst du den möglichen Gewinn.";
   const a = pool(w, mSide) + e, o = pool(w, mSide === "ja" ? "nein" : "ja");
   if (!o) return "Auf der Gegenseite hat noch niemand getippt. Bleibt es dabei, bekommst du deinen Einsatz zurück.";
-  const k = mult(streakBefore(me.id, {id: "_", status: "offen"})), g = Math.floor(Math.floor(e * o / a) * k);
-  return "Möglicher Gewinn beim aktuellen Pool: +" + g + " Punkte" + (k > 1 ? " (inkl. Serien-Bonus ×" + fx(k) + ")" : "") + ". Bei Verlust: −" + e + ".";
+  const k = mult(streakBefore(me.id, {id: "_", status: "offen"})), g = Math.floor((Math.floor(e * (a + o) * potOf(w) / a) - e) * k);
+  return "Möglicher Gewinn beim aktuellen Pool: +" + g + " Punkte" + (potOf(w) > 1 ? " mit Pot ×" + potOf(w) : "") + (k > 1 ? " (inkl. Serien-Bonus ×" + fx(k) + ")" : "") + ". Bei Verlust: −" + e + ".";
 }
 
 function renderModal() {
@@ -295,8 +339,8 @@ function renderModal() {
     <h2 style="margin-top:.5em">${esc(w.frage)}</h2>
     <div class="top"><div><div class="big pos">${c.p} %</div><div class="mute">Anwesend</div></div><div style="text-align:right"><div class="big neg">${100 - c.p} %</div><div class="mute">Nicht da</div></div></div>
     <div class="bar"><i style="width:${c.p}%"></i><b style="width:${100 - c.p}%"></b></div>
-    <div class="mute">Pool: ${c.t} Punkte</div>${chart(w)}${tr}
-    <h2>Tipps (${H.length})</h2><div class="card">${H.map(t => `<div class="rk"><span>${esc(t.name)}</span><span class="${t.seite === "ja" ? "pos" : "neg"}">${t.seite === "ja" ? "Anwesend" : "Nicht da"} · ${t.einsatz}</span></div>`).join("") || `<span class="mute">Noch keine Tipps.</span>`}</div></div>`;
+    <div class="mute">Pool: ${c.t} Punkte${potOf(w) > 1 ? " · Pot ×" + potOf(w) + ": " + c.t * potOf(w) + " Punkte gehen an die Gewinner" : ""}</div>${chart(w)}${tr}
+    <h2>Tipps (${H.length})</h2><div class="card">${H.map(t => `<div class="rk"><span>${nm(t.name, (users.find(x => x.id === t.uid) || {}).equipped)}</span><span class="${t.seite === "ja" ? "pos" : "neg"}">${t.seite === "ja" ? "Anwesend" : "Nicht da"} · ${t.einsatz}</span></div>`).join("") || `<span class="mute">Noch keine Tipps.</span>`}</div></div>`;
   if (was) M.querySelector("[data-act=close]").focus();
 }
 const closeM = () => { openBet = null; renderModal(); };
@@ -310,7 +354,7 @@ function render() {
   $("#streak").textContent = "Serie: " + sk + " richtig in Folge" + (mult(sk) > 1 ? " (nächster Gewinn ×" + fx(mult(sk)) + ")" : " (Bonus ab 2 in Folge)");
   if (tab === "updates" && seenAt !== null) { seenAt = Date.now(); ls.set("s_" + me.id, seenAt); }
   const todo = wetten.filter(w => w.status === "offen" && !myTip(w)).length, unread = feed().filter(e => e.t > seenAt).length;
-  const T = [["wetten", "Wetten" + (todo ? " (" + todo + ")" : "")], ["updates", "Updates" + (unread ? " (" + unread + ")" : "")], ["anw", "Anwesenheit"], ["rang", "Rangliste"]];
+  const T = [["wetten", "Wetten" + (todo ? " (" + todo + ")" : "")], ["updates", "Updates" + (unread ? " (" + unread + ")" : "")], ["anw", "Anwesenheit"], ["rang", "Rangliste"], ["shop", "Shop"]];
   if (me.rolle === "admin") T.push(["admin", "Admin"]);
   $("#tabs").innerHTML = T.map(([k, l]) => `<button role="tab" aria-selected="${tab === k}" data-act="tab" data-t="${k}">${l}</button>`).join("");
   $("#nbar").innerHTML = "Notification" in window && Notification.permission === "default" ? `<button data-act="notif">Benachrichtigungen aktivieren</button>` : "";
@@ -319,17 +363,26 @@ function render() {
   const sorted = [...wetten].sort((a, b) => b.datum.localeCompare(a.datum));
   if (tab === "wetten") {
     const o = sorted.filter(w => w.status === "offen"), c = sorted.filter(w => w.status !== "offen");
-    v.innerHTML = `<p class="mute">Wette antippen für Chart und Tipp. Serien-Bonus auf Gewinne: 2 richtige in Folge ×1,25, 3 ×1,5, ab 4 ×2.</p>` + (o.length ? o.map(betCard).join("") : `<p class="mute">Gerade keine offene Wette. Der Admin legt neue an.</p>`) + (c.length ? "<h2>Beendet</h2>" + c.map(betCard).join("") : "");
+    v.innerHTML = `<p class="mute">Wette antippen für Chart und Tipp. Der Pot neuer Wetten wird verdoppelt. Serien-Bonus auf Gewinne: 2 richtige in Folge ×1,25, 3 ×1,5, ab 4 ×2.</p>` + (o.length ? o.map(betCard).join("") : `<p class="mute">Gerade keine offene Wette. Der Admin legt neue an.</p>`) + (c.length ? "<h2>Beendet</h2>" + c.map(betCard).join("") : "");
   } else if (tab === "updates") {
     const F = feed();
     v.innerHTML = F.length ? F.map(e => `<div class="card ${e.t > hl ? "new" : ""}"><span class="mute">${new Date(e.t).toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"})}</span><br><b class="${e.cls || ""}">${esc(e.txt)}</b></div>`).join("") : `<p class="mute">Noch keine Neuigkeiten.</p>`;
   } else if (tab === "anw") {
     const L = Object.values(ST).sort((a, b) => b.all - a.all);
     v.innerHTML = L.length ? L.map(s => { const p = Math.round(s.da / s.all * 100); return `<div class="card"><div class="top"><b>${esc(s.n)}</b><span class="pts">${p} %</span></div><div class="bar"><i style="width:${p}%"></i></div><div class="mute">${s.da} von ${s.all} Wetten anwesend</div></div>`; }).join("") : `<p class="mute">Noch keine ausgewerteten Wetten.</p>`;
+  } else if (tab === "shop") {
+    const free = me.points - open(), own = me.owned || [], eq = me.equipped || {};
+    v.innerHTML = `<p class="mute">Gib Punkte für Namens-Looks aus. Sie erscheinen in der Rangliste und bei den Tipps. Du hast ${free} freie Punkte. Schrift, Farbe und Animation lassen sich kombinieren.</p>` +
+      Object.entries(CATS).map(([cat, label]) => `<h2>${label}</h2>` + SHOP.filter(i => i.cat === cat).map(i => {
+        const has = own.includes(i.id), on = eq[cat] === i.id;
+        const btn = has ? (on ? `<button data-act="equip" data-c="${cat}" data-i="">Ablegen</button>` : `<button class="pri" data-act="equip" data-c="${cat}" data-i="${i.id}">Anlegen</button>`)
+          : `<button class="pri" data-act="buy" data-i="${i.id}" ${free < i.p ? "disabled" : ""}>${i.p} Punkte</button>`;
+        return `<div class="card top"><div><div>${nm(me.name, {[cat]: i.id})}</div><div class="mute">${i.n}${on ? " · angelegt" : ""}</div></div>${btn}</div>`;
+      }).join("")).join("");
   } else if (tab === "rang") {
-    v.innerHTML = `<div class="card">` + [...users].sort((a, b) => b.points - a.points).map((u, i) => `<div class="rk"><span>${i + 1}. ${esc(u.name)}</span><b>${u.points}</b></div>`).join("") + `</div>`;
+    v.innerHTML = `<div class="card">` + [...users].sort((a, b) => b.points - a.points).map((u, i) => `<div class="rk"><span>${i + 1}. ${nm(u.name, u.equipped)}</span><b>${u.points}</b></div>`).join("") + `</div>`;
   } else {
-    v.innerHTML = `<h2>Neue Wette</h2><div class="card row"><input id="wl" placeholder="Lehrer-Kürzel"><input id="wd" type="date"><button class="pri" data-act="newbet">Anlegen</button></div>
+    v.innerHTML = `<h2>Neue Wette</h2><div class="card row"><input id="wl" placeholder="Lehrer-Kürzel"><input id="wd" type="date"><select id="wp" aria-label="Pot-Multiplikator"><option value="2">Pot ×2</option><option value="1">Pot ×1</option><option value="3">Pot ×3</option></select><button class="pri" data-act="newbet">Anlegen</button></div>
       <h2>Offene Wetten auswerten</h2>` + (sorted.filter(w => w.status === "offen").map(w => `<div class="card"><b>${esc(w.frage)}</b>
         <div class="row" style="margin-top:8px"><button class="ja" data-act="settle" data-w="${w.id}" data-s="ja">War anwesend</button><button class="nein" data-act="settle" data-w="${w.id}" data-s="nein">War nicht da</button></div></div>`).join("") || `<p class="mute">Nichts offen.</p>`) +
       `<h2>Einladungscodes</h2><button class="pri" data-act="newcode">Neuen Code erzeugen</button><div class="card">` +
@@ -348,6 +401,8 @@ document.addEventListener("click", e => {
   else if (a === "side") { document.activeElement.blur(); mSide = b.dataset.s; renderModal(); }
   else if (a === "amt") { document.activeElement.blur(); const mx = me.points - open(); mAmt = String(b.dataset.v === "max" ? mx : Math.min(mx, (parseInt(mAmt, 10) || 0) + +b.dataset.v)); renderModal(); }
   else if (a === "bet2") bet(openBet, mSide, {value: mAmt}).then(() => { mAmt = ""; });
+  else if (a === "buy") buy(b.dataset.i);
+  else if (a === "equip") equip(b.dataset.c, b.dataset.i);
   else if (a === "bet") bet(b.dataset.w, b.dataset.s, document.querySelector(`[data-bet="${b.dataset.w}"]`));
   else if (a === "settle") settle(b.dataset.w, b.dataset.s);
   else if (a === "newbet") newBet(); else if (a === "newcode") newCode();
