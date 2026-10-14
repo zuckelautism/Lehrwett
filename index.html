@@ -55,9 +55,14 @@ button:disabled{opacity:.45;cursor:not-allowed}
 @keyframes wob{25%{transform:rotate(-3deg)}75%{transform:rotate(3deg)}}
 @keyframes glw{50%{filter:drop-shadow(0 0 7px var(--mark))}}
 .bc{cursor:pointer}.bc:hover{border-color:var(--ink)}
-#modal{position:fixed;inset:0;background:rgba(10,15,25,.6);display:flex;align-items:flex-end;justify-content:center;z-index:10}
+#modal,#news{position:fixed;inset:0;background:rgba(10,15,25,.6);display:flex;align-items:flex-end;justify-content:center;z-index:10}
 .mw{background:var(--bg);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px}
-@media(min-width:640px){#modal{align-items:center}.mw{border-radius:16px}}
+@media(min-width:640px){#modal,#news{align-items:center}.mw{border-radius:16px}}
+#news{z-index:20}
+textarea{font:inherit;width:100%;min-height:80px;resize:vertical;margin:4px 0;border-radius:8px;border:1px solid var(--line);padding:9px 12px;background:var(--card);color:var(--ink)}
+input[type=checkbox]{width:auto;margin:0}
+.wdl{display:flex;gap:4px;align-items:center;font-weight:700}
+.stt{font-size:.8rem;font-weight:700;padding:2px 10px;border-radius:99px;background:var(--line)}
 .tg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
 .tg button{padding:12px;opacity:.55}.tg button.sel{opacity:1;outline:3px solid var(--mark)}
 .big{font-size:2.2rem;font-weight:800;line-height:1}
@@ -100,11 +105,12 @@ code{background:var(--line);padding:2px 6px;border-radius:5px}
 </main>
 
 <div id="modal" hidden></div>
+<div id="news" hidden></div>
 
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import {getFirestore,doc,setDoc,addDoc,collection,onSnapshot,writeBatch,serverTimestamp,updateDoc,increment,arrayUnion} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import {getFirestore,doc,setDoc,addDoc,collection,onSnapshot,writeBatch,serverTimestamp,updateDoc,increment,arrayUnion,deleteDoc} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA3nmLvWFZ-VQkr_lJ3pWzPNroa-jTH_PA",
@@ -122,7 +128,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 const mail = n => n + "@wette.local";
 const fmt = d => d.split("-").reverse().join(".");
 
-let openBet = null, mSide = "ja", mAmt = "";
+let openBet = null, mSide = "ja", mAmt = "", serien = [], tickets = [], newsDone = false;
 let seenAt = null, hl = 0, ST = {}, rd = {};
 let me = null, users = [], wetten = [], tipps = [], codes = [], tab = "wetten", subs = [], codesSub = null;
 
@@ -130,16 +136,16 @@ const snap = (col, set) => onSnapshot(collection(db, col), s => { set(s.docs.map
 
 onAuthStateChanged(auth, u => {
   subs.forEach(f => f()); subs = []; if (codesSub) { codesSub(); codesSub = null; }
-  me = null; rd = {}; seenAt = null; openBet = null;
-  if (!u) { $("#auth").hidden = false; $("#app").hidden = true; $("#modal").hidden = true; return; }
+  me = null; rd = {}; seenAt = null; openBet = null; newsDone = false;
+  if (!u) { $("#auth").hidden = false; $("#app").hidden = true; $("#modal").hidden = true; $("#news").hidden = true; return; }
   subs.push(onSnapshot(doc(db, "users", u.uid), s => {
     me = s.exists() ? {id: s.id, ...s.data()} : null;
     $("#auth").hidden = !!me; $("#app").hidden = !me;
     if (me && seenAt === null) { seenAt = +ls.get("s_" + me.id) || 0; if (!seenAt) { seenAt = Date.now(); ls.set("s_" + me.id, seenAt); } }
-    if (me && me.rolle === "admin" && !codesSub) codesSub = snap("codes", v => codes = v);
+    if (me && me.rolle === "admin" && !codesSub) { const u1 = snap("codes", v => codes = v), u2 = snap("serien", v => serien = v); codesSub = () => { u1(); u2(); }; }
     render();
   }));
-  subs.push(snap("users", v => users = v), snap("wetten", v => wetten = v), snap("tipps", v => tipps = v));
+  subs.push(snap("users", v => users = v), snap("wetten", v => wetten = v), snap("tipps", v => tipps = v), snap("tickets", v => tickets = v));
 });
 
 async function register() {
@@ -176,24 +182,112 @@ async function bet(wid, side, el) {
   catch (x) { alert("Tipp nicht möglich (Wette evtl. schon geschlossen)."); }
 }
 
-async function settle(wid, ergebnis) {
-  const w = {...wetten.find(x => x.id === wid), ergebnis};
-  if (!confirm("Ergebnis '" + ergebnis.toUpperCase() + "' festlegen und Punkte verteilen?")) return;
+async function settle(wid, ergebnis, minuten) {
+  const w0 = wetten.find(x => x.id === wid), w = {...w0, ergebnis};
+  if (!confirm("Ergebnis '" + LB(w0)[ergebnis] + (minuten !== undefined ? " (" + minuten + " Min)" : "") + "' festlegen und Punkte verteilen?")) return;
   const b = writeBatch(db);
   tipps.filter(t => t.wetteId === wid).forEach(t => {
     const d = delta(w, t), u = users.find(x => x.id === t.uid);
     if (d) b.update(doc(db, "users", t.uid), {points: Math.max(0, u.points + d)}); // d=0: Einsatz zurück
     b.update(doc(db, "tipps", t.id), {ausgewertet: true});
   });
-  b.update(doc(db, "wetten", wid), {status: "beendet", ergebnis, bonus: true, pot: potOf(w), beendetAm: serverTimestamp()});
+  b.update(doc(db, "wetten", wid), {status: "beendet", ergebnis, bonus: true, pot: potOf(w), beendetAm: serverTimestamp(), ...(minuten !== undefined ? {minuten} : {})});
   await b.commit();
 }
 
+// ----- Wettarten, Personen-Typen, Serien -----
+const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+const ymd = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+const num = (el, d) => { const x = parseFloat(el.value); return isNaN(x) ? d : x; };
+const LB = w => w.art === "ueu" ? {ja: "Drüber", nein: "Drunter"} : {ja: "Anwesend", nein: "Nicht da"};
+const skey = w => (w.typ || "lehrer") + "|" + w.lehrer.trim().toLowerCase();
+const frageFor = b => b.art === "ueu"
+  ? "Kommt " + b.lehrer + " am " + fmt(b.datum) + " mehr als " + b.linie + " Min zu spät?"
+  : "Ist " + b.lehrer + " am " + fmt(b.datum) + (b.typ === "freund" ? " da?" : " anwesend?");
+const mkBet = b => ({lehrer: b.lehrer, typ: b.typ, art: b.art, ...(b.art === "ueu" ? {linie: b.linie} : {}), datum: b.datum,
+  frage: frageFor(b), status: "offen", ergebnis: null, pot: b.pot, erstellt: serverTimestamp()});
+const resultTxt = w => w.art === "ueu"
+  ? w.lehrer + " war am " + fmt(w.datum) + (w.minuten !== undefined ? " " + w.minuten + " Min" : "") + " zu spät (Linie " + w.linie + "): " + LB(w)[w.ergebnis].toLowerCase() + "."
+  : w.lehrer + " war am " + fmt(w.datum) + (w.ergebnis === "ja" ? (w.typ === "freund" ? " da." : " anwesend.") : " nicht da.");
+const settleBtns = w => w.art === "ueu"
+  ? `<button class="pri" data-act="settleU" data-w="${w.id}">Verspätung eintragen</button>`
+  : `<button class="ja" data-act="settle" data-w="${w.id}" data-s="ja">War ${w.typ === "freund" ? "da" : "anwesend"}</button><button class="nein" data-act="settle" data-w="${w.id}" data-s="nein">War nicht da</button>`;
+const betFields = p => `<input id="${p}l" placeholder="Name oder Kürzel"><select id="${p}t" aria-label="Typ"><option value="lehrer">Lehrer</option><option value="freund">Schüler</option></select><select id="${p}a" aria-label="Wettart"><option value="anw">Anwesenheit</option><option value="ueu">Verspätung drüber/drunter</option></select><input id="${p}m" type="number" step="0.5" min="0" value="5" title="Linie in Minuten (nur Drüber/Drunter)" aria-label="Linie in Minuten" style="max-width:90px"><select id="${p}p" aria-label="Pot-Multiplikator"><option value="2">Pot ×2</option><option value="1">Pot ×1</option><option value="3">Pot ×3</option></select>`;
+
 async function newBet() {
   const l = $("#wl").value.trim(), d = $("#wd").value;
-  if (!l || !d) return alert("Kürzel und Datum angeben.");
-  await addDoc(collection(db, "wetten"), {lehrer: l, datum: d, frage: "Ist " + l + " am " + fmt(d) + " anwesend?", status: "offen", ergebnis: null, pot: +$("#wp").value || 2, erstellt: serverTimestamp()});
+  if (!l || !d) return alert("Name und Datum angeben.");
+  await addDoc(collection(db, "wetten"), mkBet({lehrer: l, typ: $("#wt").value, art: $("#wa").value, linie: num($("#wm"), 5), datum: d, pot: +$("#wp").value || 2}));
 }
+async function newSerie() {
+  const l = $("#sl").value.trim(), tage = [...document.querySelectorAll(".wd:checked")].map(x => +x.value);
+  if (!l || !tage.length) return alert("Name und mindestens einen Wochentag wählen.");
+  await addDoc(collection(db, "serien"), {lehrer: l, typ: $("#st").value, art: $("#sa").value, linie: num($("#sm"), 5), tage, vorlauf: Math.max(0, parseInt($("#sv").value, 10) || 0), pot: +$("#sp").value || 2, aktiv: true});
+}
+const serienHtml = () => `<h2>Wiederkehrende Wetten</h2><div class="card"><div class="row">${betFields("s")}</div>
+  <div class="row" style="margin-top:8px">${[1, 2, 3, 4, 5, 6, 0].map(d => `<label class="wdl"><input type="checkbox" class="wd" value="${d}">${WD[d]}</label>`).join("")}</div>
+  <div class="row" style="margin-top:8px"><input id="sv" type="number" min="0" max="14" value="3" aria-label="Tage im Voraus" style="max-width:90px"><span class="mute">Tage vorher anlegen</span><button class="pri" data-act="newserie">Serie anlegen</button></div></div>
+  <p class="mute">Die Wetten werden angelegt, sobald ein Admin die Seite öffnet.</p>` +
+  (serien.map(s => `<div class="card top"><div><b>${esc(s.lehrer)}</b><div class="mute">${s.typ === "freund" ? "Schüler" : "Lehrer"} · ${s.art === "ueu" ? "Drüber/Drunter, Linie " + s.linie + " Min" : "Anwesenheit"} · ${s.tage.map(d => WD[d]).join(", ")} · ${s.vorlauf ?? 3} Tage vorher · Pot ×${s.pot}${s.aktiv === false ? " · pausiert" : ""}</div></div><div class="row"><button data-act="sertog" data-i="${s.id}">${s.aktiv === false ? "Aktivieren" : "Pausieren"}</button><button data-act="serdel" data-i="${s.id}" aria-label="Serie löschen">✕</button></div></div>`).join("") || `<p class="mute">Noch keine Serien.</p>`);
+
+// Legt fällige Serien-Wetten an (nur wenn ein Admin die Seite offen hat); feste ID verhindert Doppelte
+const made = new Set();
+function autoGen() {
+  if (!me || me.rolle !== "admin" || !ready() || !rd.serien) return;
+  const n = new Date();
+  serien.filter(x => x.aktiv !== false).forEach(x => {
+    for (let k = 0; k <= (x.vorlauf ?? 3); k++) {
+      const dt = new Date(n.getFullYear(), n.getMonth(), n.getDate() + k), datum = ymd(dt), id = x.id + "_" + datum;
+      if (!x.tage.includes(dt.getDay()) || made.has(id) || wetten.some(w => w.id === id)) continue;
+      made.add(id);
+      setDoc(doc(db, "wetten", id), mkBet({...x, datum})).catch(() => made.delete(id));
+    }
+  });
+}
+async function settleU(wid) {
+  const w = wetten.find(x => x.id === wid), r = prompt("Tatsächliche Verspätung in Minuten (0 = pünktlich). Linie: " + w.linie);
+  if (r === null) return;
+  const m = parseFloat(r.replace(",", "."));
+  if (isNaN(m) || m < 0) return alert("Bitte eine Zahl eingeben.");
+  settle(wid, m > w.linie ? "ja" : "nein", m);
+}
+
+// ----- Tickets -----
+const TA = {vorschlag: "Vorschlag", feedback: "Feedback", fehler: "Fehler"}, TS = ["offen", "in Arbeit", "erledigt", "abgelehnt"];
+async function sendTicket() {
+  const t = $("#tt").value.trim();
+  if (t.length < 3) return alert("Bitte mindestens 3 Zeichen schreiben.");
+  try { await addDoc(collection(db, "tickets"), {uid: me.id, name: me.name, art: $("#ta").value, text: t, status: "offen", antwort: "", erstellt: serverTimestamp()}); $("#tt").value = ""; $("#tt").blur(); render(); }
+  catch (e) { alert("Senden fehlgeschlagen."); }
+}
+async function saveTicket(id) {
+  try { await updateDoc(doc(db, "tickets", id), {status: $("#ts_" + id).value, antwort: $("#tr_" + id).value.trim()}); document.activeElement.blur(); }
+  catch (e) { alert("Speichern fehlgeschlagen."); }
+}
+const adminT = t => `<div class="row" style="margin-top:8px"><select id="ts_${t.id}" aria-label="Status">${TS.map(x => `<option ${x === t.status ? "selected" : ""}>${x}</option>`).join("")}</select><input id="tr_${t.id}" placeholder="Antwort (optional)" value="${esc(t.antwort || "")}"><button class="pri" data-act="tsave" data-i="${t.id}">Speichern</button><button data-act="tdel" data-i="${t.id}" aria-label="Ticket löschen">✕</button></div>`;
+const ticketsHtml = () => {
+  const T2 = [...tickets].sort((a, b) => (ts(b.erstellt) || Date.now()) - (ts(a.erstellt) || Date.now()));
+  return `<h2>Neues Ticket</h2><div class="card"><select id="ta" aria-label="Art"><option value="vorschlag">Vorschlag</option><option value="feedback">Feedback</option><option value="fehler">Fehler melden</option></select><textarea id="tt" maxlength="500" placeholder="Was ist deine Idee oder was ist dir aufgefallen?"></textarea><button class="pri" data-act="tsend">Absenden</button></div><h2>Alle Tickets</h2>` +
+    (T2.map(t => `<div class="card"><div class="top"><b>${TA[t.art] || esc(t.art)}</b><span class="stt">${esc(t.status)}</span></div><p>${esc(t.text)}</p><div class="mute">von ${esc(t.name)}</div>${t.antwort ? `<p><b>Antwort:</b> ${esc(t.antwort)}</p>` : ""}${me.rolle === "admin" ? adminT(t) : ""}</div>`).join("") || `<p class="mute">Noch keine Tickets.</p>`);
+};
+
+// ----- Update-Fenster: bei jedem Update VERSION erhöhen und CHANGES neu schreiben -----
+const VERSION = "2026-10-14";
+const CHANGES = [
+  "Tickets: Mach Vorschläge, gib Feedback oder melde Fehler. Der Admin antwortet direkt im Ticket.",
+  "Wetten gibt es jetzt auch auf Schüler (da oder nicht), nicht nur auf Lehrer. Die Anwesenheit ist nach Lehrern und Schülern getrennt.",
+  "Neue Wettart Drüber/Drunter: Kommt jemand mehr oder weniger Minuten zu spät als die Linie?",
+  "Wiederkehrende Wetten: Der Admin kann z. B. jeden Mittwoch automatisch eine Wette anlegen lassen.",
+  "Dieses Fenster: Nach jedem Update siehst du hier kurz, was neu ist."
+];
+function showNews() {
+  newsDone = true;
+  const N = $("#news");
+  N.innerHTML = `<div class="mw" role="dialog" aria-modal="true" aria-label="Neuigkeiten"><h2 style="margin-top:0">Neu in dieser Version</h2><ul>${CHANGES.map(c => `<li>${esc(c)}</li>`).join("")}</ul><button class="pri" data-act="news" style="width:100%">Verstanden</button></div>`;
+  N.hidden = false; N.querySelector("button").focus();
+}
+const closeNews = () => { $("#news").hidden = true; if (me) ls.set("v_" + me.id, VERSION); };
+
 async function newCode() {
   const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", max = parseInt($("#cm").value, 10) || 1;
   let c = $("#cn").value.trim().toUpperCase();
@@ -239,7 +333,7 @@ const resTxt = d => d > 0 ? "Du gewinnst +" + d + " Punkte." : d < 0 ? "Du verli
 function stats() {
   const g = {};
   wetten.filter(w => w.status === "beendet").forEach(w => {
-    const k = w.lehrer.trim().toLowerCase(); g[k] ??= {n: w.lehrer.trim(), da: 0, all: 0};
+    if (w.art === "ueu") return; const k = skey(w); g[k] ??= {n: w.lehrer.trim(), typ: w.typ || "lehrer", da: 0, all: 0};
     g[k].all++; if (w.ergebnis === "ja") g[k].da++;
   });
   return g;
@@ -252,7 +346,7 @@ function feed() {
     if (w.status === "beendet") {
       const m = myTip(w), d = m ? delta(w, m) : 0;
       ev.push({t: ts(w.beendetAm) || ts(w.erstellt) || Date.now(), cls: d > 0 ? "pos" : d < 0 ? "neg" : "",
-        txt: "Ergebnis: " + w.lehrer + " war am " + fmt(w.datum) + (w.ergebnis === "ja" ? " anwesend." : " nicht da.") + (m ? " " + resTxt(d) : "")});
+        txt: "Ergebnis: " + resultTxt(w) + (m ? " " + resTxt(d) : "")});
     }
   });
   return ev.sort((a, b) => b.t - a.t).slice(0, 40);
@@ -298,12 +392,12 @@ async function equip(cat, id) {
 
 function chance(w) { const j = pool(w, "ja"), n = pool(w, "nein"), t = j + n; return {t, p: t ? Math.round(j / t * 100) : 50}; }
 function betCard(w) {
-  const c = chance(w), m = myTip(w), s = ST[w.lehrer.trim().toLowerCase()];
+  const c = chance(w), m = myTip(w), s = ST[skey(w)];
   const q = s ? " · Quote " + Math.round(s.da / s.all * 100) + " % (" + s.da + "/" + s.all + ")" : "";
-  const st = w.status === "beendet" ? `<b>${w.ergebnis === "ja" ? "Anwesend" : "Nicht da"}</b>` : `<span class="mute">offen</span>`;
+  const st = w.status === "beendet" ? `<b>${LB(w)[w.ergebnis]}</b>` : `<span class="mute">offen</span>`;
   return `<div class="card bc" tabindex="0" role="button" data-act="open" data-w="${w.id}"><div class="top"><b>${esc(w.frage)}</b>${st}</div>
     <div class="bar"><i style="width:${c.p}%"></i><b style="width:${100 - c.p}%"></b></div>
-    <div class="mute">Anwesend ${c.p} % · Nicht da ${100 - c.p} % · Pool ${c.t}${potOf(w) > 1 ? " ×" + potOf(w) : ""}${q}${m ? " · Dein Tipp: " + m.seite.toUpperCase() + " " + m.einsatz : ""}</div></div>`;
+    <div class="mute">${LB(w).ja} ${c.p} % · ${LB(w).nein} ${100 - c.p} % · Pool ${c.t}${potOf(w) > 1 ? " ×" + potOf(w) : ""}${q}${m ? " · Dein Tipp: " + LB(w)[m.seite].toUpperCase() + " " + m.einsatz : ""}</div></div>`;
 }
 
 const tz = t => ts(t.zeit) || (t.zeit === null ? Date.now() : 0);
@@ -313,7 +407,7 @@ function chart(w) {
   let j = 0, tot = 0; const P = [50];
   L.forEach(t => { tot += t.einsatz; if (t.seite === "ja") j += t.einsatz; P.push(j / tot * 100); });
   const pts = P.map((p, i) => (i * 300 / (P.length - 1)).toFixed(1) + "," + (100 - p).toFixed(1)).join(" ");
-  return `<div class="mute">Chance auf "anwesend" im Verlauf der Tipps</div><svg viewBox="0 0 300 100" preserveAspectRatio="none" style="width:100%;height:110px" role="img" aria-label="Verlauf der Chance"><line x1="0" x2="300" y1="50" y2="50" stroke="var(--line)" stroke-dasharray="4" vector-effect="non-scaling-stroke"/><polyline fill="none" stroke="var(--ja)" stroke-width="2.5" vector-effect="non-scaling-stroke" points="${pts}"/></svg>`;
+  return `<div class="mute">Chance auf "${LB(w).ja.toLowerCase()}" im Verlauf der Tipps</div><svg viewBox="0 0 300 100" preserveAspectRatio="none" style="width:100%;height:110px" role="img" aria-label="Verlauf der Chance"><line x1="0" x2="300" y1="50" y2="50" stroke="var(--line)" stroke-dasharray="4" vector-effect="non-scaling-stroke"/><polyline fill="none" stroke="var(--ja)" stroke-width="2.5" vector-effect="non-scaling-stroke" points="${pts}"/></svg>`;
 }
 
 function est(w) {
@@ -328,23 +422,23 @@ function renderModal() {
   const M = $("#modal"), w = openBet && wetten.find(x => x.id === openBet);
   if (!w || !me) { M.hidden = true; M.innerHTML = ""; return; }
   if (!M.hidden && M.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;
-  const was = M.hidden, c = chance(w), m = myTip(w), isOpen = w.status === "offen", s = ST[w.lehrer.trim().toLowerCase()];
+  const was = M.hidden, c = chance(w), m = myTip(w), isOpen = w.status === "offen", s = ST[skey(w)];
   let tr;
-  if (!isOpen) tr = `<div class="card"><b>Ergebnis: ${w.ergebnis === "ja" ? "anwesend" : "nicht da"}</b>${m ? "<br>" + resTxt(delta(w, m)) : ""}</div>`;
-  else if (m) tr = `<div class="card">Dein Tipp: <b>${m.seite === "ja" ? "ANWESEND" : "NICHT DA"}</b> mit ${m.einsatz} Punkten.</div>`;
-  else tr = `<div class="card"><div class="tg"><button class="ja ${mSide === "ja" ? "sel" : ""}" data-act="side" data-s="ja">Anwesend ${c.p} %</button><button class="nein ${mSide === "nein" ? "sel" : ""}" data-act="side" data-s="nein">Nicht da ${100 - c.p} %</button></div>
+  if (!isOpen) tr = `<div class="card"><b>Ergebnis: ${esc(resultTxt(w))}</b>${m ? "<br>" + resTxt(delta(w, m)) : ""}</div>`;
+  else if (m) tr = `<div class="card">Dein Tipp: <b>${LB(w)[m.seite].toUpperCase()}</b> mit ${m.einsatz} Punkten.</div>`;
+  else tr = `<div class="card"><div class="tg"><button class="ja ${mSide === "ja" ? "sel" : ""}" data-act="side" data-s="ja">${LB(w).ja} ${c.p} %</button><button class="nein ${mSide === "nein" ? "sel" : ""}" data-act="side" data-s="nein">${LB(w).nein} ${100 - c.p} %</button></div>
     <input id="amt" type="number" min="1" inputmode="numeric" placeholder="Einsatz in Punkten" value="${esc(mAmt)}">
     <div class="row"><button data-act="amt" data-v="10">+10</button><button data-act="amt" data-v="50">+50</button><button data-act="amt" data-v="100">+100</button><button data-act="amt" data-v="max">Max</button></div>
     <p class="mute" id="est">${est(w)}</p><button class="pri" data-act="bet2" style="width:100%">Tipp abgeben</button></div>`;
-  if (isOpen && me.rolle === "admin") tr += `<div class="card"><div class="mute">Admin: Wette auswerten</div><div class="row" style="margin-top:6px"><button class="ja" data-act="settle" data-w="${w.id}" data-s="ja">War anwesend</button><button class="nein" data-act="settle" data-w="${w.id}" data-s="nein">War nicht da</button></div></div>`;
+  if (isOpen && me.rolle === "admin") tr += `<div class="card"><div class="mute">Admin: Wette auswerten</div><div class="row" style="margin-top:6px">${settleBtns(w)}</div></div>`;
   const H = tipps.filter(t => t.wetteId === w.id).sort((a, b) => b.einsatz - a.einsatz);
   M.hidden = false;
   M.innerHTML = `<div class="mw" role="dialog" aria-modal="true" aria-label="Wette"><div class="top"><span class="mute">${isOpen ? "Offene Wette" : "Beendet"}${s ? " · bisherige Anwesenheit " + Math.round(s.da / s.all * 100) + " %" : ""}</span><button data-act="close" aria-label="Schließen">✕</button></div>
     <h2 style="margin-top:.5em">${esc(w.frage)}</h2>
-    <div class="top"><div><div class="big pos">${c.p} %</div><div class="mute">Anwesend</div></div><div style="text-align:right"><div class="big neg">${100 - c.p} %</div><div class="mute">Nicht da</div></div></div>
+    <div class="top"><div><div class="big pos">${c.p} %</div><div class="mute">${LB(w).ja}</div></div><div style="text-align:right"><div class="big neg">${100 - c.p} %</div><div class="mute">${LB(w).nein}</div></div></div>
     <div class="bar"><i style="width:${c.p}%"></i><b style="width:${100 - c.p}%"></b></div>
     <div class="mute">Pool: ${c.t} Punkte${potOf(w) > 1 ? " · Pot ×" + potOf(w) + ": " + c.t * potOf(w) + " Punkte gehen an die Gewinner" : ""}</div>${chart(w)}${tr}
-    <h2>Tipps (${H.length})</h2><div class="card">${H.map(t => `<div class="rk"><span>${nm(t.name, (users.find(x => x.id === t.uid) || {}).equipped)}</span><span class="${t.seite === "ja" ? "pos" : "neg"}">${t.seite === "ja" ? "Anwesend" : "Nicht da"} · ${t.einsatz}</span></div>`).join("") || `<span class="mute">Noch keine Tipps.</span>`}</div></div>`;
+    <h2>Tipps (${H.length})</h2><div class="card">${H.map(t => `<div class="rk"><span>${nm(t.name, (users.find(x => x.id === t.uid) || {}).equipped)}</span><span class="${t.seite === "ja" ? "pos" : "neg"}">${LB(w)[t.seite]} · ${t.einsatz}</span></div>`).join("") || `<span class="mute">Noch keine Tipps.</span>`}</div></div>`;
   if (was) M.querySelector("[data-act=close]").focus();
 }
 const closeM = () => { openBet = null; renderModal(); };
@@ -353,17 +447,19 @@ function render() {
   if (!me) return;
   $("#who").textContent = me.name + (me.rolle === "admin" ? " (Admin)" : "");
   $("#pts").textContent = me.points + " Punkte" + (open() ? " (" + (me.points - open()) + " frei)" : "");
-  ST = stats(); check(); renderModal();
+  ST = stats(); check(); renderModal(); autoGen();
+  if (!newsDone && ls.get("v_" + me.id) !== VERSION) showNews();
   const sk = streakBefore(me.id, {id: "_", status: "offen"});
   $("#streak").textContent = "Serie: " + sk + " richtig in Folge" + (mult(sk) > 1 ? " (nächster Gewinn ×" + fx(mult(sk)) + ")" : " (Bonus ab 2 in Folge)");
   if (tab === "updates" && seenAt !== null) { seenAt = Date.now(); ls.set("s_" + me.id, seenAt); }
+  const nt = me.rolle === "admin" ? tickets.filter(t => t.status === "offen").length : 0;
   const todo = wetten.filter(w => w.status === "offen" && !myTip(w)).length, unread = feed().filter(e => e.t > seenAt).length;
-  const T = [["wetten", "Wetten" + (todo ? " (" + todo + ")" : "")], ["updates", "Updates" + (unread ? " (" + unread + ")" : "")], ["anw", "Anwesenheit"], ["rang", "Rangliste"], ["shop", "Shop"]];
+  const T = [["wetten", "Wetten" + (todo ? " (" + todo + ")" : "")], ["updates", "Updates" + (unread ? " (" + unread + ")" : "")], ["anw", "Anwesenheit"], ["rang", "Rangliste"], ["shop", "Shop"], ["tickets", "Tickets" + (nt ? " (" + nt + ")" : "")]];
   if (me.rolle === "admin") T.push(["admin", "Admin"]);
   $("#tabs").innerHTML = T.map(([k, l]) => `<button role="tab" aria-selected="${tab === k}" data-act="tab" data-t="${k}">${l}</button>`).join("");
   $("#nbar").innerHTML = "Notification" in window && Notification.permission === "default" ? `<button data-act="notif">Benachrichtigungen aktivieren</button>` : "";
   const v = $("#view");
-  if (document.activeElement && v.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return; // Eingabe nicht zerstören
+  if (document.activeElement && v.contains(document.activeElement) && ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return; // Eingabe nicht zerstören
   const sorted = [...wetten].sort((a, b) => b.datum.localeCompare(a.datum));
   if (tab === "wetten") {
     const o = sorted.filter(w => w.status === "offen"), c = sorted.filter(w => w.status !== "offen");
@@ -373,7 +469,8 @@ function render() {
     v.innerHTML = F.length ? F.map(e => `<div class="card ${e.t > hl ? "new" : ""}"><span class="mute">${new Date(e.t).toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"})}</span><br><b class="${e.cls || ""}">${esc(e.txt)}</b></div>`).join("") : `<p class="mute">Noch keine Neuigkeiten.</p>`;
   } else if (tab === "anw") {
     const L = Object.values(ST).sort((a, b) => b.all - a.all);
-    v.innerHTML = L.length ? L.map(s => { const p = Math.round(s.da / s.all * 100); return `<div class="card"><div class="top"><b>${esc(s.n)}</b><span class="pts">${p} %</span></div><div class="bar"><i style="width:${p}%"></i></div><div class="mute">${s.da} von ${s.all} Wetten anwesend</div></div>`; }).join("") : `<p class="mute">Noch keine ausgewerteten Wetten.</p>`;
+    const card = s => { const p = Math.round(s.da / s.all * 100); return `<div class="card"><div class="top"><b>${esc(s.n)}</b><span class="pts">${p} %</span></div><div class="bar"><i style="width:${p}%"></i></div><div class="mute">${s.da} von ${s.all} Wetten ${s.typ === "freund" ? "da" : "anwesend"}</div></div>`; };
+    v.innerHTML = L.length ? [["lehrer", "Lehrer"], ["freund", "Schüler"]].map(([t, l]) => { const X = L.filter(s => s.typ === t); return X.length ? `<h2>${l}</h2>` + X.map(card).join("") : ""; }).join("") : `<p class="mute">Noch keine ausgewerteten Wetten.</p>`;
   } else if (tab === "shop") {
     const free = me.points - open(), own = me.owned || [], eq = me.equipped || {};
     v.innerHTML = `<p class="mute">Gib Punkte für Namens-Looks aus. Sie erscheinen in der Rangliste und bei den Tipps. Du hast ${free} freie Punkte. Schrift, Farbe und Animation lassen sich kombinieren.</p>` +
@@ -383,12 +480,14 @@ function render() {
           : `<button class="pri" data-act="buy" data-i="${i.id}" ${free < i.p ? "disabled" : ""}>${i.p} Punkte</button>`;
         return `<div class="card top"><div><div>${nm(me.name, {[cat]: i.id})}</div><div class="mute">${i.n}${on ? " · angelegt" : ""}</div></div>${btn}</div>`;
       }).join("")).join("");
+  } else if (tab === "tickets") {
+    v.innerHTML = ticketsHtml();
   } else if (tab === "rang") {
     v.innerHTML = `<div class="card">` + [...users].sort((a, b) => b.points - a.points).map((u, i) => `<div class="rk"><span>${i + 1}. ${nm(u.name, u.equipped)}</span><b>${u.points}</b></div>`).join("") + `</div>`;
   } else {
-    v.innerHTML = `<h2>Neue Wette</h2><div class="card row"><input id="wl" placeholder="Lehrer-Kürzel"><input id="wd" type="date"><select id="wp" aria-label="Pot-Multiplikator"><option value="2">Pot ×2</option><option value="1">Pot ×1</option><option value="3">Pot ×3</option></select><button class="pri" data-act="newbet">Anlegen</button></div>
+    v.innerHTML = `<h2>Neue Wette</h2><div class="card"><div class="row">${betFields("w")}</div><div class="row" style="margin-top:8px"><input id="wd" type="date"><button class="pri" data-act="newbet">Anlegen</button></div></div>${serienHtml()}
       <h2>Offene Wetten auswerten</h2>` + (sorted.filter(w => w.status === "offen").map(w => `<div class="card"><b>${esc(w.frage)}</b>
-        <div class="row" style="margin-top:8px"><button class="ja" data-act="settle" data-w="${w.id}" data-s="ja">War anwesend</button><button class="nein" data-act="settle" data-w="${w.id}" data-s="nein">War nicht da</button></div></div>`).join("") || `<p class="mute">Nichts offen.</p>`) +
+        <div class="row" style="margin-top:8px">${settleBtns(w)}</div></div>`).join("") || `<p class="mute">Nichts offen.</p>`) +
       `<h2>Einladungscodes</h2><div class="card row"><input id="cn" placeholder="Code-Name (leer = zufällig)"><input id="cm" type="number" min="1" value="1" title="Wie oft nutzbar" aria-label="Wie oft nutzbar" style="max-width:90px"><button class="pri" data-act="newcode">Code erzeugen</button></div><div class="card">` +
       (codes.filter(c => rest(c) > 0).map(c => `<div class="rk"><code>${esc(c.id)}</code><span class="mute">${rest(c)} von ${c.max || 1} frei</span></div>`).join("") || `<span class="mute">Keine freien Codes.</span>`) + `</div>`;
   }
@@ -396,6 +495,7 @@ function render() {
 
 document.addEventListener("click", e => {
   if (e.target.id === "modal") return closeM();
+  if (e.target.id === "news") return closeNews();
   const b = e.target.closest("[data-act]"); if (!b) return; const a = b.dataset.act;
   if (a === "login") login(); else if (a === "register") register(); else if (a === "logout") signOut(auth);
   else if (a === "tab") { tab = b.dataset.t; if (tab === "updates") hl = seenAt; render(); }
@@ -407,6 +507,14 @@ document.addEventListener("click", e => {
   else if (a === "bet2") bet(openBet, mSide, {value: mAmt}).then(() => { mAmt = ""; });
   else if (a === "buy") buy(b.dataset.i);
   else if (a === "equip") equip(b.dataset.c, b.dataset.i);
+  else if (a === "settleU") settleU(b.dataset.w);
+  else if (a === "tsend") sendTicket();
+  else if (a === "tsave") saveTicket(b.dataset.i);
+  else if (a === "tdel") { if (confirm("Ticket löschen?")) deleteDoc(doc(db, "tickets", b.dataset.i)); }
+  else if (a === "newserie") newSerie();
+  else if (a === "sertog") updateDoc(doc(db, "serien", b.dataset.i), {aktiv: serien.find(x => x.id === b.dataset.i).aktiv === false});
+  else if (a === "serdel") { if (confirm("Serie löschen? Schon angelegte Wetten bleiben.")) deleteDoc(doc(db, "serien", b.dataset.i)); }
+  else if (a === "news") closeNews();
   else if (a === "bet") bet(b.dataset.w, b.dataset.s, document.querySelector(`[data-bet="${b.dataset.w}"]`));
   else if (a === "settle") settle(b.dataset.w, b.dataset.s);
   else if (a === "newbet") newBet(); else if (a === "newcode") newCode();
