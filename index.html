@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Anwesenheitswette</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700;12..96,800&family=Press+Start+2P&family=Pacifico&family=Bangers&family=Cinzel:wght@700&family=Orbitron:wght@700&family=Cinzel+Decorative:wght@700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700;12..96,800&family=Press+Start+2P&family=Pacifico&family=Bangers&family=Cinzel:wght@700&family=Orbitron:wght@700&family=Cinzel+Decorative:wght@700&family=Londrina+Solid:wght@900&family=Sniglet:wght@800&display=swap">
 <style>
 :root{--bg:#eef2f6;--ink:#14213d;--mute:#5b6577;--card:#fff;--line:#d3dbe6;--mark:#ffd60a;--ja:#1f8a5f;--nein:#c93c54;font-family:"Bricolage Grotesque",system-ui,sans-serif}
 @media(prefers-color-scheme:dark){:root{--bg:#10151f;--ink:#e8edf5;--mute:#9aa6ba;--card:#1a2130;--line:#2c3649}}
@@ -39,16 +39,30 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .f_comic{font-family:"Bangers",cursive;letter-spacing:.05em}
 .f_serif{font-family:"Cinzel",serif;font-weight:700}
 .f_neon{font-family:"Orbitron",sans-serif;letter-spacing:.05em}
+.f_jungle{font-family:"Londrina Solid",cursive;font-weight:900;letter-spacing:.03em}
+.f_raccoon{font-family:"Sniglet",cursive;font-weight:800}
 .f_mystic{font-family:"Cinzel Decorative",serif;font-weight:700}
 .c_violet{color:#9b5de5}.c_lavender{color:#a78bfa}.c_midnight{color:#5c6bff}.c_moon{color:#8d99ae}
 .c_nebula{background-image:linear-gradient(90deg,#9b5de5,#f15bb5,#00bbf9,#9b5de5)}
 .c_galaxy{background-image:linear-gradient(90deg,#4361ee,#7b2cbf,#c77dff,#e0aaff,#4361ee)}
+.c_bark{color:#a9713b}.c_moss{color:#5fa052}.c_savanne{color:#d2a05f}.c_raccoon{color:#8a817c}
+.c_jungle{background-image:linear-gradient(90deg,#3c8d5e,#74c69d,#c08a4a,#3c8d5e)}
+.c_safari{background-image:linear-gradient(90deg,#a9713b,#e0a43a,#d1581f,#a9713b)}
+.c_ringtail{background-image:linear-gradient(90deg,#b8b0aa 50%,#5a5560 50%);background-size:24px 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+.a_vine{transform-origin:50% 0}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.chips button[aria-pressed=true]{background:var(--mark);color:#14213d;border-color:var(--mark)}
+button.cat{width:100%;text-align:left;border:none;background:transparent;font-size:1.15rem;padding:6px 0}
 .c_gold{color:#d4a017}.c_pink{color:#ff2fa0}.c_ice{color:#4cc9f0}
-.c_rainbow,.c_fire,.c_nebula,.c_galaxy{background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+.c_rainbow,.c_fire,.c_nebula,.c_galaxy,.c_jungle,.c_safari{background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
 .c_rainbow{background-image:linear-gradient(90deg,#f33,#fa0,#ee0,#3c3,#0cf,#63f,#f3c,#f33)}
 .c_fire{background-image:linear-gradient(90deg,#ffd60a,#ff6b00,#e01e37,#ff6b00,#ffd60a)}
 @media(prefers-reduced-motion:no-preference){
-.c_rainbow,.c_fire,.c_nebula,.c_galaxy{animation:bgm 3s linear infinite}
+.c_rainbow,.c_fire,.c_nebula,.c_galaxy,.c_jungle,.c_safari{animation:bgm 3s linear infinite}
+.c_ringtail{animation:rng 1s linear infinite}
+.a_vine{animation:vin 2.6s ease-in-out infinite}
+.a_sneak{animation:snk 3s ease-in-out infinite}
+.a_rummage{animation:rmg 1.2s ease-in-out infinite}
 .a_pulse{animation:pls 1.4s ease-in-out infinite}
 .a_float{animation:flt 2.2s ease-in-out infinite}
 .a_wobble{animation:wob .9s ease-in-out infinite}
@@ -61,6 +75,10 @@ button:disabled{opacity:.45;cursor:not-allowed}
 @keyframes flt{50%{transform:translateY(-3px)}}
 @keyframes wob{25%{transform:rotate(-3deg)}75%{transform:rotate(3deg)}}
 @keyframes glw{50%{filter:drop-shadow(0 0 7px var(--mark))}}
+@keyframes rng{to{background-position:24px 0}}
+@keyframes vin{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+@keyframes snk{0%,100%{transform:translateX(0);opacity:1}50%{transform:translateX(8px);opacity:.75}}
+@keyframes rmg{0%,100%{transform:translate(0,0) rotate(0)}20%{transform:translate(-2px,1px) rotate(-2deg)}40%{transform:translate(2px,-1px) rotate(2deg)}60%{transform:translate(-1px,0)}80%{transform:translate(1px,1px)}}
 @keyframes twk{0%,100%{opacity:1}40%{opacity:.55}55%{opacity:1;filter:brightness(1.4)}70%{opacity:.7}}
 @keyframes aur{50%{filter:drop-shadow(0 0 8px #9b5de5) drop-shadow(0 0 16px #5a189a)}}
 #prof{z-index:15}
@@ -153,7 +171,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 const mail = n => n + "@wette.local";
 const fmt = d => d.split("-").reverse().join(".");
 
-let openBet = null, mSide = "ja", mAmt = "", serien = [], tickets = [], newsDone = false, profU = null, TM = new Map(), dv = 0;
+let openBet = null, mSide = "ja", mAmt = "", serien = [], tickets = [], newsDone = false, profU = null, TM = new Map(), dv = 0, shopTh = "alle", shopOpen = null;
 let seenAt = null, hl = 0, ST = {}, rd = {};
 let me = null, users = [], wetten = [], tipps = [], codes = [], tab = "wetten", subs = [], codesSub = null;
 
@@ -305,17 +323,19 @@ const ticketsHtml = () => {
 };
 
 // ----- Update-Fenster: bei jedem Update VERSION erhöhen und CHANGES neu schreiben -----
-const VERSION = "2026-10-15";
 const CHANGES = [
-  "Einladen: Dein Benutzername ist dein Einladungscode. Für jeden neuen Spieler, der sich damit registriert, bekommst du 300 Punkte.",
-  "Erfolge und Titel: Mit Erfolgen wie Hot Streak oder High Roller schaltest du Titel frei. Der Titel steht in der Rangliste rechts neben deinem Namen und ändert den Rahmen.",
-  "Profile: Tippe in der Rangliste auf einen Namen und sieh Trefferquote, Gewinn und Verlust, Cosmetics, Erfolge und wer wen eingeladen hat.",
-  "Profilbild: In deinem eigenen Profil kannst du ein Bild hochladen und deinen Titel auswählen."
+  {v: "2026-10-15", t: [
+    "Einladen: Dein Benutzername ist dein Einladungscode. Für jeden neuen Spieler, der sich damit registriert, bekommst du 300 Punkte.",
+    "Erfolge und Titel: Mit Erfolgen wie Hot Streak oder High Roller schaltest du Titel frei. Der Titel steht in der Rangliste rechts neben deinem Namen und ändert den Rahmen.",
+    "Profile: Tippe in der Rangliste auf einen Namen und sieh Trefferquote, Gewinn und Verlust, Cosmetics, Erfolge und wer wen eingeladen hat.",
+    "Profilbild: In deinem eigenen Profil kannst du ein Bild hochladen und deinen Titel auswählen."]}
 ];
+const VERSION = CHANGES[CHANGES.length - 1].v;
 function showNews() {
   newsDone = true;
-  const N = $("#news");
-  N.innerHTML = `<div class="mw" role="dialog" aria-modal="true" aria-label="Neuigkeiten"><h2 style="margin-top:0">Neu in dieser Version</h2><ul>${CHANGES.map(c => `<li>${esc(c)}</li>`).join("")}</ul><button class="pri" data-act="news" style="width:100%">Verstanden</button></div>`;
+  const N = $("#news"), sv = ls.get("v_" + me.id);
+  const L = CHANGES.filter(c => sv ? c.v > sv : c === CHANGES[CHANGES.length - 1]).flatMap(c => c.t);
+  N.innerHTML = `<div class="mw" role="dialog" aria-modal="true" aria-label="Neuigkeiten"><h2 style="margin-top:0">Neu in dieser Version</h2><ul>${L.map(c => `<li>${esc(c)}</li>`).join("")}</ul><button class="pri" data-act="news" style="width:100%">Verstanden</button></div>`;
   N.hidden = false; N.querySelector("button").focus();
 }
 const closeNews = () => { $("#news").hidden = true; if (me) ls.set("v_" + me.id, VERSION); };
@@ -414,18 +434,43 @@ function check() {
 }
 
 const CATS = {font: "Schriftarten", color: "Farben & Effekte", anim: "Animationen"};
+const THEMES = ["Nacht", "Regenbogen", "Feuer & Gold", "Dschungel", "Waschbär", "Klassisch"];
 const SHOP = [
-  {id: "f_pixel", cat: "font", n: "Pixel", p: 300}, {id: "f_hand", cat: "font", n: "Handschrift", p: 250},
-  {id: "f_comic", cat: "font", n: "Comic", p: 250}, {id: "f_serif", cat: "font", n: "Edel", p: 300},
-  {id: "c_gold", cat: "color", n: "Gold", p: 150}, {id: "c_pink", cat: "color", n: "Neon-Pink", p: 150}, {id: "c_ice", cat: "color", n: "Eisblau", p: 150},
-  {id: "c_rainbow", cat: "color", n: "Regenbogen (animiert)", p: 600}, {id: "c_fire", cat: "color", n: "Feuer (animiert)", p: 500},
-  {id: "a_pulse", cat: "anim", n: "Puls", p: 200}, {id: "a_float", cat: "anim", n: "Schweben", p: 200},
-  {id: "a_wobble", cat: "anim", n: "Wackeln", p: 200}, {id: "a_glow", cat: "anim", n: "Leuchten", p: 400},
-  {id: "f_neon", cat: "font", n: "Neon-Tech", p: 300}, {id: "f_mystic", cat: "font", n: "Mystisch", p: 350},
-  {id: "c_violet", cat: "color", n: "Violett", p: 150}, {id: "c_lavender", cat: "color", n: "Lavendel", p: 150},
-  {id: "c_midnight", cat: "color", n: "Mitternachtsblau", p: 150}, {id: "c_moon", cat: "color", n: "Mondlicht", p: 150},
-  {id: "c_nebula", cat: "color", n: "Nebel (animiert)", p: 550}, {id: "c_galaxy", cat: "color", n: "Galaxie (animiert)", p: 600},
-  {id: "a_twinkle", cat: "anim", n: "Funkeln", p: 250}, {id: "a_aura", cat: "anim", n: "Nacht-Aura", p: 450}
+  {id: "f_pixel", cat: "font", th: "Klassisch", n: "Pixel", p: 300},
+  {id: "f_hand", cat: "font", th: "Klassisch", n: "Handschrift", p: 250},
+  {id: "f_comic", cat: "font", th: "Regenbogen", n: "Comic", p: 250},
+  {id: "f_serif", cat: "font", th: "Feuer & Gold", n: "Edel", p: 300},
+  {id: "f_neon", cat: "font", th: "Nacht", n: "Neon-Tech", p: 300},
+  {id: "f_mystic", cat: "font", th: "Nacht", n: "Mystisch", p: 350},
+  {id: "f_jungle", cat: "font", th: "Dschungel", n: "Dschungel", p: 300},
+  {id: "f_raccoon", cat: "font", th: "Waschbär", n: "Waschbär", p: 300},
+  {id: "c_gold", cat: "color", th: "Feuer & Gold", n: "Gold", p: 150},
+  {id: "c_pink", cat: "color", th: "Regenbogen", n: "Neon-Pink", p: 150},
+  {id: "c_ice", cat: "color", th: "Klassisch", n: "Eisblau", p: 150},
+  {id: "c_rainbow", cat: "color", th: "Regenbogen", n: "Regenbogen (animiert)", p: 600},
+  {id: "c_fire", cat: "color", th: "Feuer & Gold", n: "Feuer (animiert)", p: 500},
+  {id: "c_violet", cat: "color", th: "Nacht", n: "Violett", p: 150},
+  {id: "c_lavender", cat: "color", th: "Nacht", n: "Lavendel", p: 150},
+  {id: "c_midnight", cat: "color", th: "Nacht", n: "Mitternachtsblau", p: 150},
+  {id: "c_moon", cat: "color", th: "Nacht", n: "Mondlicht", p: 150},
+  {id: "c_nebula", cat: "color", th: "Nacht", n: "Nebel (animiert)", p: 550},
+  {id: "c_galaxy", cat: "color", th: "Nacht", n: "Galaxie (animiert)", p: 600},
+  {id: "c_bark", cat: "color", th: "Dschungel", n: "Baumrinde", p: 150},
+  {id: "c_moss", cat: "color", th: "Dschungel", n: "Moos", p: 150},
+  {id: "c_savanne", cat: "color", th: "Dschungel", n: "Savanne", p: 150},
+  {id: "c_jungle", cat: "color", th: "Dschungel", n: "Dschungel (animiert)", p: 550},
+  {id: "c_safari", cat: "color", th: "Dschungel", n: "Safari (animiert)", p: 500},
+  {id: "c_raccoon", cat: "color", th: "Waschbär", n: "Waschbär-Grau", p: 150},
+  {id: "c_ringtail", cat: "color", th: "Waschbär", n: "Ringelschwanz (animiert)", p: 500},
+  {id: "a_pulse", cat: "anim", th: "Klassisch", n: "Puls", p: 200},
+  {id: "a_float", cat: "anim", th: "Klassisch", n: "Schweben", p: 200},
+  {id: "a_wobble", cat: "anim", th: "Regenbogen", n: "Wackeln", p: 200},
+  {id: "a_glow", cat: "anim", th: "Feuer & Gold", n: "Leuchten", p: 400},
+  {id: "a_twinkle", cat: "anim", th: "Nacht", n: "Funkeln", p: 250},
+  {id: "a_aura", cat: "anim", th: "Nacht", n: "Nacht-Aura", p: 450},
+  {id: "a_vine", cat: "anim", th: "Dschungel", n: "Lianen-Schwung", p: 250},
+  {id: "a_sneak", cat: "anim", th: "Waschbär", n: "Schleichen", p: 200},
+  {id: "a_rummage", cat: "anim", th: "Waschbär", n: "Müll durchwühlen", p: 250}
 ];
 const nm = (name, eq) => { eq = eq || {}; return `<span class="nm ${[eq.font, eq.color, eq.anim].filter(Boolean).join(" ")}">${esc(name)}</span>`; };
 async function buy(id) {
@@ -601,14 +646,21 @@ function render() {
     const card = s => { const p = Math.round(s.da / s.all * 100); return `<div class="card"><div class="top"><b>${esc(s.n)}</b><span class="pts">${p} %</span></div><div class="bar"><i style="width:${p}%"></i></div><div class="mute">${s.da} von ${s.all} Wetten ${s.typ === "freund" ? "da" : "anwesend"}</div></div>`; };
     v.innerHTML = L.length ? [["lehrer", "Lehrer"], ["freund", "Schüler"]].map(([t, l]) => { const X = L.filter(s => s.typ === t); return X.length ? `<h2>${l}</h2>` + X.map(card).join("") : ""; }).join("") : `<p class="mute">Noch keine ausgewerteten Wetten.</p>`;
   } else if (tab === "shop") {
+    if (!shopOpen) { try { shopOpen = JSON.parse(ls.get("so")) || {}; } catch (e) { shopOpen = {}; } }
     const free = me.points - open(), own = me.owned || [], eq = me.equipped || {};
-    v.innerHTML = `<p class="mute">Gib Punkte für Namens-Looks aus. Sie erscheinen in der Rangliste und bei den Tipps. Du hast ${free} freie Punkte. Schrift, Farbe und Animation lassen sich kombinieren.</p>` +
-      Object.entries(CATS).map(([cat, label]) => `<h2>${label}</h2>` + SHOP.filter(i => i.cat === cat).map(i => {
-        const has = own.includes(i.id), on = eq[cat] === i.id;
-        const btn = has ? (on ? `<button data-act="equip" data-c="${cat}" data-i="">Ablegen</button>` : `<button class="pri" data-act="equip" data-c="${cat}" data-i="${i.id}">Anlegen</button>`)
-          : `<button class="pri" data-act="buy" data-i="${i.id}" ${free < i.p ? "disabled" : ""}>${i.p} Punkte</button>`;
-        return `<div class="card top"><div><div>${nm(me.name, {[cat]: i.id})}</div><div class="mute">${i.n}${on ? " · angelegt" : ""}</div></div>${btn}</div>`;
-      }).join("")).join("");
+    const fl = SHOP.filter(i => shopTh === "alle" || i.th === shopTh);
+    const chips = ["alle", ...THEMES].map(t => `<button data-act="shth" data-t="${esc(t)}" aria-pressed="${shopTh === t}">${t === "alle" ? "Alle" : esc(t)}</button>`).join("");
+    v.innerHTML = `<p class="mute">Gib Punkte für Namens-Looks aus. Sie erscheinen in der Rangliste, bei den Tipps und im Profil. Du hast ${free} freie Punkte. Schrift, Farbe und Animation lassen sich kombinieren.</p><div class="chips">${chips}</div>` +
+      (Object.entries(CATS).map(([cat, label]) => {
+        const its = fl.filter(i => i.cat === cat); if (!its.length) return "";
+        const op = shopOpen[cat] !== false;
+        return `<h2 style="margin:.8em 0 .3em"><button class="cat" data-act="shcat" data-c="${cat}" aria-expanded="${op}">${op ? "▾" : "▸"} ${label} <span class="mute">(${its.length})</span></button></h2>` + (op ? its.map(i => {
+          const has = own.includes(i.id), on = eq[cat] === i.id;
+          const btn = has ? (on ? `<button data-act="equip" data-c="${cat}" data-i="">Ablegen</button>` : `<button class="pri" data-act="equip" data-c="${cat}" data-i="${i.id}">Anlegen</button>`)
+            : `<button class="pri" data-act="buy" data-i="${i.id}" ${free < i.p ? "disabled" : ""}>${i.p} Punkte</button>`;
+          return `<div class="card top"><div><div>${nm(me.name, {[cat]: i.id})}</div><div class="mute">${i.n} · ${i.th}${on ? " · angelegt" : ""}</div></div>${btn}</div>`;
+        }).join("") : "");
+      }).join("") || `<p class="mute">Keine Items.</p>`);
   } else if (tab === "tickets") {
     v.innerHTML = ticketsHtml();
   } else if (tab === "rang") {
@@ -645,6 +697,8 @@ document.addEventListener("click", e => {
   else if (a === "sertog") updateDoc(doc(db, "serien", b.dataset.i), {aktiv: serien.find(x => x.id === b.dataset.i).aktiv === false});
   else if (a === "serdel") { if (confirm("Serie löschen? Schon angelegte Wetten bleiben.")) deleteDoc(doc(db, "serien", b.dataset.i)); }
   else if (a === "news") closeNews();
+  else if (a === "shth") { shopTh = b.dataset.t; render(); }
+  else if (a === "shcat") { shopOpen[b.dataset.c] = shopOpen[b.dataset.c] === false; ls.set("so", JSON.stringify(shopOpen)); render(); }
   else if (a === "prof") { profU = b.dataset.u; renderProf(); }
   else if (a === "pclose") closeP();
   else if (a === "avdel") updateDoc(doc(db, "users", me.id), {avatar: ""});
