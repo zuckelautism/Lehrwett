@@ -54,10 +54,24 @@ button:disabled{opacity:.45;cursor:not-allowed}
 @keyframes flt{50%{transform:translateY(-3px)}}
 @keyframes wob{25%{transform:rotate(-3deg)}75%{transform:rotate(3deg)}}
 @keyframes glw{50%{filter:drop-shadow(0 0 7px var(--mark))}}
+#prof{z-index:15}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:700;z-index:30;max-width:90vw;text-align:center}
+.lb{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;margin:6px 0;border:2px solid var(--line);border-radius:10px;background:var(--card);cursor:pointer}
+.lb .l{display:flex;align-items:center;gap:8px;min-width:0}
+.lb .r{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.ttl{font-size:.75rem;font-weight:800;padding:2px 8px;border-radius:99px;background:var(--line);white-space:nowrap}
+.av{width:30px;height:30px;border-radius:50%;object-fit:cover;background:var(--line);display:inline-flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
+.t_first{border-color:#4cc9f0}.t_rek{border-color:#2a9d6f}.t_vet{border-color:#7b8bb0}.t_under{border-color:#9b5de5}.t_sniper{border-color:#e01e37}.t_roller,.t_tycoon{border-color:#d4a017}.t_hot{border-color:#ff6b00}.t_squad{border-color:#2a9d6f}
+.t_inferno,.t_stil{border:2px solid transparent;background-size:auto,200% 100%;background-clip:padding-box,border-box}
+.t_inferno{background-image:linear-gradient(var(--card),var(--card)),linear-gradient(90deg,#ffd60a,#ff6b00,#e01e37,#ff6b00,#ffd60a)}
+.t_stil{background-image:linear-gradient(var(--card),var(--card)),linear-gradient(90deg,#f33,#fa0,#3c3,#0cf,#63f,#f33)}
+@media(prefers-reduced-motion:no-preference){.t_hot{animation:gl1 1.6s ease-in-out infinite}.t_roller,.t_tycoon,.t_squad{animation:gl2 2s ease-in-out infinite}.t_inferno,.t_stil{animation:bgm 3s linear infinite}}
+@keyframes gl1{50%{box-shadow:0 0 12px #ff6b00}}
+@keyframes gl2{50%{box-shadow:0 0 12px var(--mark)}}
 .bc{cursor:pointer}.bc:hover{border-color:var(--ink)}
-#modal,#news{position:fixed;inset:0;background:rgba(10,15,25,.6);display:flex;align-items:flex-end;justify-content:center;z-index:10}
+#modal,#news,#prof{position:fixed;inset:0;background:rgba(10,15,25,.6);display:flex;align-items:flex-end;justify-content:center;z-index:10}
 .mw{background:var(--bg);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px}
-@media(min-width:640px){#modal,#news{align-items:center}.mw{border-radius:16px}}
+@media(min-width:640px){#modal,#news,#prof{align-items:center}.mw{border-radius:16px}}
 #news{z-index:20}
 textarea{font:inherit;width:100%;min-height:80px;resize:vertical;margin:4px 0;border-radius:8px;border:1px solid var(--line);padding:9px 12px;background:var(--card);color:var(--ink)}
 input[type=checkbox]{width:auto;margin:0}
@@ -84,7 +98,7 @@ code{background:var(--line);padding:2px 6px;border-radius:5px}
   <div class="card">
     <input id="u" placeholder="Benutzername (a-z, 0-9, _)" autocomplete="username">
     <input id="p" type="password" placeholder="Passwort (mind. 6 Zeichen)" autocomplete="current-password">
-    <input id="c" placeholder="Einladungscode (nur zum Registrieren)" autocapitalize="characters">
+    <input id="c" placeholder="Einladungscode oder Name eines Spielers" autocapitalize="none">
     <p class="err" id="aerr"></p>
     <div class="row">
       <button class="pri" data-act="login">Anmelden</button>
@@ -96,7 +110,7 @@ code{background:var(--line);padding:2px 6px;border-radius:5px}
 
 <main id="app" hidden>
   <div class="top">
-    <div><div class="mute" id="who"></div><div class="pts" id="pts"></div><div class="mute" id="streak"></div></div>
+    <div><div class="mute" id="who" data-act="prof" style="cursor:pointer" title="Mein Profil"></div><div class="pts" id="pts"></div><div class="mute" id="streak"></div></div>
     <button data-act="logout">Abmelden</button>
   </div>
   <div class="tabs" role="tablist" id="tabs"></div>
@@ -106,11 +120,13 @@ code{background:var(--line);padding:2px 6px;border-radius:5px}
 
 <div id="modal" hidden></div>
 <div id="news" hidden></div>
+<div id="prof" hidden></div>
+<div id="toast" hidden></div>
 
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import {getFirestore,doc,setDoc,addDoc,collection,onSnapshot,writeBatch,serverTimestamp,updateDoc,increment,arrayUnion,deleteDoc} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import {getFirestore,doc,setDoc,addDoc,collection,onSnapshot,writeBatch,serverTimestamp,updateDoc,increment,arrayUnion,deleteDoc,getDoc,getDocs,query,where,limit} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA3nmLvWFZ-VQkr_lJ3pWzPNroa-jTH_PA",
@@ -128,11 +144,11 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 const mail = n => n + "@wette.local";
 const fmt = d => d.split("-").reverse().join(".");
 
-let openBet = null, mSide = "ja", mAmt = "", serien = [], tickets = [], newsDone = false;
+let openBet = null, mSide = "ja", mAmt = "", serien = [], tickets = [], newsDone = false, profU = null, TM = new Map(), dv = 0;
 let seenAt = null, hl = 0, ST = {}, rd = {};
 let me = null, users = [], wetten = [], tipps = [], codes = [], tab = "wetten", subs = [], codesSub = null;
 
-const snap = (col, set) => onSnapshot(collection(db, col), s => { set(s.docs.map(d => ({id: d.id, ...d.data()}))); rd[col] = 1; render(); });
+const snap = (col, set) => onSnapshot(collection(db, col), s => { set(s.docs.map(d => ({id: d.id, ...d.data()}))); dv++; rd[col] = 1; render(); });
 
 onAuthStateChanged(auth, u => {
   subs.forEach(f => f()); subs = []; if (codesSub) { codesSub(); codesSub = null; }
@@ -145,25 +161,33 @@ onAuthStateChanged(auth, u => {
     if (me && me.rolle === "admin" && !codesSub) { const u1 = snap("codes", v => codes = v), u2 = snap("serien", v => serien = v); codesSub = () => { u1(); u2(); }; }
     render();
   }));
-  subs.push(snap("users", v => users = v), snap("wetten", v => wetten = v), snap("tipps", v => tipps = v), snap("tickets", v => tickets = v));
+  subs.push(snap("users", v => users = v), snap("wetten", v => wetten = v), snap("tipps", v => { tipps = v; TM = new Map(v.map(t => [t.id, t])); }), snap("tickets", v => tickets = v));
 });
 
 async function register() {
-  const n = $("#u").value.trim().toLowerCase(), p = $("#p").value, c = $("#c").value.trim().toUpperCase();
+  const n = $("#u").value.trim().toLowerCase(), p = $("#p").value, cRaw = $("#c").value.trim(), cu = cRaw.toUpperCase(), cl = cRaw.toLowerCase();
   if (!/^[a-z0-9_]{3,20}$/.test(n)) return err("Benutzername: 3-20 Zeichen, nur a-z, 0-9 und _.");
   if (p.length < 6) return err("Passwort: mindestens 6 Zeichen.");
-  if (!c) return err("Bitte Einladungscode eingeben.");
+  if (!cRaw) return err("Bitte Einladungscode oder den Namen eines Spielers eingeben.");
   let cred;
   try { cred = await createUserWithEmailAndPassword(auth, mail(n), p); }
   catch (e) { return err(e.code === "auth/email-already-in-use" ? "Benutzername ist schon vergeben." : "Registrierung fehlgeschlagen."); }
   try {
-    const b = writeBatch(db);
-    b.set(doc(db, "users", cred.user.uid), {name: n, points: 1000, rolle: "user", code: c});
-    b.update(doc(db, "codes", c), {uses: increment(1)});
+    const b = writeBatch(db), uid = cred.user.uid;
+    const cs = await getDoc(doc(db, "codes", cu));
+    if (cs.exists()) { // Einladungscode vom Admin
+      b.set(doc(db, "users", uid), {name: n, points: 1000, rolle: "user", code: cu, joined: serverTimestamp()});
+      b.update(doc(db, "codes", cu), {uses: increment(1)});
+    } else { // Referral: Name eines Spielers, der dafür 300 Punkte bekommt
+      const q = await getDocs(query(collection(db, "users"), where("name", "==", cl), limit(1)));
+      if (q.empty) throw new Error("unbekannt");
+      b.set(doc(db, "users", uid), {name: n, points: 1000, rolle: "user", refBy: q.docs[0].id, joined: serverTimestamp()});
+      b.update(doc(db, "users", q.docs[0].id), {points: increment(300), referrals: increment(1)});
+    }
     await b.commit();
   } catch (e) {
     await cred.user.delete();
-    err("Code ungültig oder schon benutzt.");
+    err("Code oder Spielername ungültig, aufgebraucht oder das Einladungslimit ist erreicht.");
   }
 }
 async function login() {
@@ -272,13 +296,12 @@ const ticketsHtml = () => {
 };
 
 // ----- Update-Fenster: bei jedem Update VERSION erhöhen und CHANGES neu schreiben -----
-const VERSION = "2026-10-14";
+const VERSION = "2026-10-15";
 const CHANGES = [
-  "Tickets: Mach Vorschläge, gib Feedback oder melde Fehler. Der Admin antwortet direkt im Ticket.",
-  "Wetten gibt es jetzt auch auf Schüler (da oder nicht), nicht nur auf Lehrer. Die Anwesenheit ist nach Lehrern und Schülern getrennt.",
-  "Neue Wettart Drüber/Drunter: Kommt jemand mehr oder weniger Minuten zu spät als die Linie?",
-  "Wiederkehrende Wetten: Der Admin kann z. B. jeden Mittwoch automatisch eine Wette anlegen lassen.",
-  "Dieses Fenster: Nach jedem Update siehst du hier kurz, was neu ist."
+  "Einladen: Dein Benutzername ist dein Einladungscode. Für jeden neuen Spieler, der sich damit registriert, bekommst du 300 Punkte.",
+  "Erfolge und Titel: Mit Erfolgen wie Hot Streak oder High Roller schaltest du Titel frei. Der Titel steht in der Rangliste rechts neben deinem Namen und ändert den Rahmen.",
+  "Profile: Tippe in der Rangliste auf einen Namen und sieh Trefferquote, Gewinn und Verlust, Cosmetics, Erfolge und wer wen eingeladen hat.",
+  "Profilbild: In deinem eigenen Profil kannst du ein Bild hochladen und deinen Titel auswählen."
 ];
 function showNews() {
   newsDone = true;
@@ -302,7 +325,7 @@ const ls = {get: k => { try { return localStorage.getItem(k); } catch (e) { retu
 const ts = x => x && x.toMillis ? x.toMillis() : 0;
 const ready = () => rd.users && rd.wetten && rd.tipps;
 const sum = a => a.reduce((s, t) => s + t.einsatz, 0);
-const myTip = w => tipps.find(t => t.id === w.id + "_" + me.id);
+const myTip = w => TM.get(w.id + "_" + me.id);
 
 const bt = w => ts(w.beendetAm) || ts(w.erstellt);
 const pools = w => { const a = tipps.filter(x => x.wetteId === w.id); return {wp: sum(a.filter(x => x.seite === w.ergebnis)), lp: sum(a.filter(x => x.seite !== w.ergebnis))}; };
@@ -315,7 +338,7 @@ function streakBefore(uid, w) {
   const L = wetten.filter(b => b.status === "beendet" && b.id !== w.id && bt(b) < tw).sort((a, b) => bt(b) - bt(a));
   let n = 0;
   for (const b of L) {
-    const t = tipps.find(x => x.id === b.id + "_" + uid); if (!t) continue;
+    const t = TM.get(b.id + "_" + uid); if (!t) continue;
     const {wp, lp} = pools(b); if (!wp || !lp) continue;
     if (t.seite === b.ergebnis) n++; else break;
   }
@@ -349,6 +372,12 @@ function feed() {
         txt: "Ergebnis: " + resultTxt(w) + (m ? " " + resTxt(d) : "")});
     }
   });
+  users.forEach(u => {
+    if (!u.joined) return;
+    const by = u.refBy && (users.find(x => x.id === u.refBy) || {}).name;
+    ev.push({t: ts(u.joined) || Date.now(), cls: u.refBy === me.id ? "pos" : "",
+      txt: u.refBy === me.id ? "+300 Punkte: " + u.name + " ist über dich beigetreten." : "Neu dabei: " + u.name + (by ? " (eingeladen von " + by + ")" : "")});
+  });
   return ev.sort((a, b) => b.t - a.t).slice(0, 40);
 }
 
@@ -368,6 +397,11 @@ function check() {
     if (w.status === "beendet" && m && !seen.has("r" + w.id)) { add.push("r" + w.id); if (!first) notify("Wette beendet", resTxt(delta(w, m))); }
   });
   if (first || add.length) { add.forEach(a => seen.add(a)); ls.set(key, JSON.stringify([...seen])); }
+  const ak = "a_" + me.id; let aa = null;
+  try { aa = JSON.parse(ls.get(ak)); } catch (e) {}
+  const ids = earned(me).map(a => a.id);
+  if (Array.isArray(aa)) ids.filter(i => !aa.includes(i)).forEach(i => { const a = ACH.find(x => x.id === i); toast("Neuer Titel: " + a.t + " (" + a.d + ")"); notify("Neuer Titel", a.t); });
+  if (!Array.isArray(aa) || ids.some(i => !aa.includes(i))) ls.set(ak, JSON.stringify([...new Set([...(aa || []), ...ids])]));
 }
 
 const CATS = {font: "Schriftarten", color: "Farben & Effekte", anim: "Animationen"};
@@ -388,6 +422,87 @@ async function buy(id) {
 async function equip(cat, id) {
   try { await updateDoc(doc(db, "users", me.id), {equipped: {...(me.equipped || {}), [cat]: id}}); }
   catch (e) { alert("Anlegen fehlgeschlagen."); }
+}
+
+// ----- Erfolge & Titel (werden live aus den öffentlichen Tipps berechnet, nicht speicherbar/fälschbar) -----
+const ACH = [
+  {id: "first", t: "Frischling", d: "Ersten Tipp abgegeben", f: p => p.placed >= 1, fx: "t_first"},
+  {id: "hot", t: "Hot Streak", d: "3 richtige Tipps in Folge", f: p => p.best >= 3, fx: "t_hot"},
+  {id: "inferno", t: "Unaufhaltsam", d: "5 richtige Tipps in Folge", f: p => p.best >= 5, fx: "t_inferno"},
+  {id: "roller", t: "High Roller", d: "500 oder mehr Punkte auf einen Tipp gesetzt", f: p => p.maxStake >= 500, fx: "t_roller"},
+  {id: "sniper", t: "Scharfschütze", d: "Mind. 60 % Trefferquote bei 10 ausgewerteten Tipps", f: p => p.win + p.loss >= 10 && p.win / (p.win + p.loss) >= 0.6, fx: "t_sniper"},
+  {id: "under", t: "Underdog", d: "Gewonnen, obwohl höchstens 25 % des Pools auf deiner Seite lag", f: p => p.under >= 1, fx: "t_under"},
+  {id: "vet", t: "Stammgast", d: "25 Tipps abgegeben", f: p => p.placed >= 25, fx: "t_vet"},
+  {id: "tycoon", t: "Tycoon", d: "Aktuell mindestens 5000 Punkte", f: (p, u) => u.points >= 5000, fx: "t_tycoon"},
+  {id: "stil", t: "Stilikone", d: "5 Shop-Items besitzen", f: (p, u) => (u.owned || []).length >= 5, fx: "t_stil"},
+  {id: "rek", t: "Rekrutierer", d: "3 Spieler eingeladen", f: (p, u) => (u.referrals || 0) >= 3, fx: "t_rek"},
+  {id: "squad", t: "Anführer", d: "10 Spieler eingeladen", f: (p, u) => (u.referrals || 0) >= 10, fx: "t_squad"}
+];
+let memo = {v: -1, p: new Map()};
+function PS(uid) {
+  if (memo.v !== dv) memo = {v: dv, p: new Map()};
+  if (!memo.p.has(uid)) memo.p.set(uid, calc(uid));
+  return memo.p.get(uid);
+}
+function calc(uid) {
+  const mine = tipps.filter(x => x.uid === uid), L = [];
+  wetten.forEach(w => { if (w.status !== "beendet") return; const t = TM.get(w.id + "_" + uid); if (t) L.push({w, t}); });
+  L.sort((a, b) => bt(a.w) - bt(b.w));
+  const r = {placed: mine.length, maxStake: mine.reduce((m, t) => Math.max(m, t.einsatz), 0), win: 0, loss: 0, lost: 0, cur: 0, best: 0, under: 0, wins: []};
+  L.forEach(({w, t}) => {
+    const {wp, lp} = pools(w); if (!wp || !lp) return; // Rückerstattung zählt nicht
+    if (t.seite === w.ergebnis) { r.win++; r.cur++; r.best = Math.max(r.best, r.cur); r.wins.push({w, t}); if (wp / (wp + lp) <= 0.25) r.under++; }
+    else { r.loss++; r.lost += t.einsatz; r.cur = 0; }
+  });
+  return r;
+}
+const earned = u => ACH.filter(a => a.f(PS(u.id), u));
+const titleOf = u => { const a = ACH.find(x => x.id === u.titel); return a && a.f(PS(u.id), u) ? a : null; };
+const avHtml = (u, sz) => u.avatar && u.avatar.startsWith("data:image/jpeg;base64,")
+  ? `<img class="av" style="width:${sz}px;height:${sz}px" alt="" src="${esc(u.avatar)}">`
+  : `<span class="av" style="width:${sz}px;height:${sz}px;font-size:${Math.round(sz * 0.45)}px">${esc((u.name || "?")[0].toUpperCase())}</span>`;
+const lbRow = (u, i) => { const a = titleOf(u);
+  return `<div class="lb ${a ? a.fx : ""}" tabindex="0" role="button" data-act="prof" data-u="${u.id}"><div class="l"><span>${i + 1}.</span>${avHtml(u, 30)}${nm(u.name, u.equipped)}</div><div class="r">${a ? `<span class="ttl">${esc(a.t)}</span>` : ""}<b>${u.points}</b></div></div>`; };
+
+let toastT = null;
+function toast(m) { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 6000); }
+
+function renderProf() {
+  const P = $("#prof"), u = profU && users.find(x => x.id === profU);
+  if (!u || !me) { P.hidden = true; P.innerHTML = ""; return; }
+  if (!P.hidden && P.contains(document.activeElement) && ["INPUT", "SELECT"].includes(document.activeElement.tagName)) return;
+  const ps = PS(u.id), own = u.id === me.id, ern = earned(u), tt = titleOf(u), settled = ps.win + ps.loss;
+  const rank = [...users].sort((a, b) => b.points - a.points).findIndex(x => x.id === u.id) + 1;
+  const gain = ps.wins.reduce((s, x) => s + delta(x.w, x.t), 0), net = gain - ps.lost;
+  const invited = users.filter(x => x.refBy === u.id).map(x => esc(x.name));
+  const joinTxt = u.refBy ? "eingeladen von " + esc((users.find(x => x.id === u.refBy) || {name: "?"}).name) : u.code ? "Code " + esc(u.code) : "Gründer oder älteres Konto";
+  const items = (u.owned || []).map(id => SHOP.find(i => i.id === id)).filter(Boolean);
+  const row = (k, val) => `<div class="rk"><span>${k}</span><b>${val}</b></div>`;
+  const mine = own ? `<h2>Dein Profil</h2><div class="card"><div class="mute">Profilbild (wird auf 96 × 96 verkleinert)</div><div class="row"><input id="avfile" type="file" accept="image/*"><button data-act="avdel">Entfernen</button></div>
+    <div class="mute" style="margin-top:8px">Titel</div><select id="titelsel" aria-label="Titel"><option value="">Kein Titel</option>${ern.map(a => `<option value="${a.id}" ${u.titel === a.id ? "selected" : ""}>${esc(a.t)}</option>`).join("")}</select>
+    <div class="mute" style="margin-top:8px">Dein Einladungscode ist dein Benutzername <b>${esc(u.name)}</b>. Pro neuem Spieler bekommst du 300 Punkte (${u.referrals || 0} bisher).</div><button class="pri" data-act="copyinv" style="margin-top:6px">Einladung kopieren</button></div>` : "";
+  const was = P.hidden; P.hidden = false;
+  P.innerHTML = `<div class="mw" role="dialog" aria-modal="true" aria-label="Profil"><div class="top"><span class="mute">Profil</span><button data-act="pclose" aria-label="Schließen">✕</button></div>
+    <div class="lb ${tt ? tt.fx : ""}" style="cursor:default"><div class="l">${avHtml(u, 64)}<div><div style="font-size:1.3rem;font-weight:800">${nm(u.name, u.equipped)}</div><div class="mute">Platz ${rank} von ${users.length}</div></div></div><div class="r">${tt ? `<span class="ttl">${esc(tt.t)}</span>` : ""}</div></div>
+    <div class="card">${row("Punkte", u.points)}${row("Beigetreten", joinTxt)}${row("Eingeladen", invited.length ? invited.join(", ") : "niemand")}</div>
+    <h2>Tipps</h2><div class="card">${row("Abgegeben", ps.placed)}${row("Richtig", ps.win)}${row("Falsch", ps.loss)}${row("Trefferquote", settled ? Math.round(ps.win / settled * 100) + " %" : "–")}${row("Gewonnen", "+" + gain)}${row("Verloren", "−" + ps.lost)}${row("Bilanz", (net >= 0 ? "+" : "−") + Math.abs(net))}${row("Beste Serie", ps.best)}${row("Größter Einsatz", ps.maxStake)}</div>
+    <h2>Cosmetics</h2><div class="card">${items.length ? items.map(i => `<span class="ttl">${esc(i.n)}</span> `).join("") : `<span class="mute">Noch keine Items.</span>`}</div>
+    <h2>Erfolge (${ern.length}/${ACH.length})</h2><div class="card">${ACH.map(a => { const ok = ern.includes(a); return `<div class="rk" style="${ok ? "" : "opacity:.45"}"><span><b>${ok ? "✓ " : ""}${esc(a.t)}</b><br><span class="mute">${esc(a.d)}</span></span></div>`; }).join("")}</div>${mine}</div>`;
+  if (was) P.querySelector("[data-act=pclose]").focus();
+}
+const closeP = () => { profU = null; renderProf(); };
+function setAvatar(file) {
+  if (!file) return;
+  const img = new Image(), url = URL.createObjectURL(file);
+  img.onload = () => {
+    const c = document.createElement("canvas"); c.width = c.height = 96;
+    const m = Math.min(img.width, img.height);
+    c.getContext("2d").drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, 96, 96);
+    URL.revokeObjectURL(url);
+    updateDoc(doc(db, "users", me.id), {avatar: c.toDataURL("image/jpeg", 0.75)}).catch(() => alert("Bild konnte nicht gespeichert werden."));
+  };
+  img.onerror = () => alert("Das war kein Bild.");
+  img.src = url;
 }
 
 function chance(w) { const j = pool(w, "ja"), n = pool(w, "nein"), t = j + n; return {t, p: t ? Math.round(j / t * 100) : 50}; }
@@ -445,9 +560,9 @@ const closeM = () => { openBet = null; renderModal(); };
 
 function render() {
   if (!me) return;
-  $("#who").textContent = me.name + (me.rolle === "admin" ? " (Admin)" : "");
+  $("#who").textContent = me.name + (me.rolle === "admin" ? " (Admin)" : ""); $("#who").dataset.u = me.id;
   $("#pts").textContent = me.points + " Punkte" + (open() ? " (" + (me.points - open()) + " frei)" : "");
-  ST = stats(); check(); renderModal(); autoGen();
+  ST = stats(); check(); renderModal(); renderProf(); autoGen();
   if (!newsDone && ls.get("v_" + me.id) !== VERSION) showNews();
   const sk = streakBefore(me.id, {id: "_", status: "offen"});
   $("#streak").textContent = "Serie: " + sk + " richtig in Folge" + (mult(sk) > 1 ? " (nächster Gewinn ×" + fx(mult(sk)) + ")" : " (Bonus ab 2 in Folge)");
@@ -483,7 +598,7 @@ function render() {
   } else if (tab === "tickets") {
     v.innerHTML = ticketsHtml();
   } else if (tab === "rang") {
-    v.innerHTML = `<div class="card">` + [...users].sort((a, b) => b.points - a.points).map((u, i) => `<div class="rk"><span>${i + 1}. ${nm(u.name, u.equipped)}</span><b>${u.points}</b></div>`).join("") + `</div>`;
+    v.innerHTML = `<p class="mute">Tippe auf einen Namen, um das Profil zu sehen.</p>` + [...users].sort((a, b) => b.points - a.points).map(lbRow).join("");
   } else {
     v.innerHTML = `<h2>Neue Wette</h2><div class="card"><div class="row">${betFields("w")}</div><div class="row" style="margin-top:8px"><input id="wd" type="date"><button class="pri" data-act="newbet">Anlegen</button></div></div>${serienHtml()}
       <h2>Offene Wetten auswerten</h2>` + (sorted.filter(w => w.status === "offen").map(w => `<div class="card"><b>${esc(w.frage)}</b>
@@ -496,6 +611,7 @@ function render() {
 document.addEventListener("click", e => {
   if (e.target.id === "modal") return closeM();
   if (e.target.id === "news") return closeNews();
+  if (e.target.id === "prof") return closeP();
   const b = e.target.closest("[data-act]"); if (!b) return; const a = b.dataset.act;
   if (a === "login") login(); else if (a === "register") register(); else if (a === "logout") signOut(auth);
   else if (a === "tab") { tab = b.dataset.t; if (tab === "updates") hl = seenAt; render(); }
@@ -515,6 +631,10 @@ document.addEventListener("click", e => {
   else if (a === "sertog") updateDoc(doc(db, "serien", b.dataset.i), {aktiv: serien.find(x => x.id === b.dataset.i).aktiv === false});
   else if (a === "serdel") { if (confirm("Serie löschen? Schon angelegte Wetten bleiben.")) deleteDoc(doc(db, "serien", b.dataset.i)); }
   else if (a === "news") closeNews();
+  else if (a === "prof") { profU = b.dataset.u; renderProf(); }
+  else if (a === "pclose") closeP();
+  else if (a === "avdel") updateDoc(doc(db, "users", me.id), {avatar: ""});
+  else if (a === "copyinv") { const t = "Komm auf die Wettseite: " + location.origin + location.pathname + " (bei der Registrierung als Code einfach meinen Namen eingeben: " + me.name + ")"; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast("Einladung kopiert"), () => prompt("Einladung kopieren:", t)); }
   else if (a === "bet") bet(b.dataset.w, b.dataset.s, document.querySelector(`[data-bet="${b.dataset.w}"]`));
   else if (a === "settle") settle(b.dataset.w, b.dataset.s);
   else if (a === "newbet") newBet(); else if (a === "newcode") newCode();
@@ -523,8 +643,12 @@ document.addEventListener("input", e => {
   if (e.target.id === "amt") { mAmt = e.target.value; const x = $("#est"); if (x) x.textContent = est(wetten.find(w => w.id === openBet)); }
 });
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape" && openBet) closeM();
-  if ((e.key === "Enter" || e.key === " ") && e.target.dataset && e.target.dataset.act === "open") { e.preventDefault(); e.target.click(); }
+  if (e.key === "Escape" && profU) closeP(); else if (e.key === "Escape" && openBet) closeM();
+  if ((e.key === "Enter" || e.key === " ") && e.target.dataset && ["open", "prof"].includes(e.target.dataset.act)) { e.preventDefault(); e.target.click(); }
+});
+document.addEventListener("change", e => {
+  if (e.target.id === "titelsel") updateDoc(doc(db, "users", me.id), {titel: e.target.value}).catch(() => alert("Titel konnte nicht gespeichert werden."));
+  if (e.target.id === "avfile") setAvatar(e.target.files[0]);
 });
 </script>
 </body>
